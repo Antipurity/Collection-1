@@ -1,2 +1,3 @@
 # Collection-1
-Ignorable.
+
+Merely an incomplete snapshot. But `after.js` contains an introduction.
