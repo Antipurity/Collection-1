@@ -1,53 +1,21 @@
-{'This old collection of various low-level things, made from blood…'
-	'Peak of sum from peaks of parts — potentially. Very unfinished now.'
-	'Each extended not by adding more and more functionality, flexible in development but ultimately rigid, but by punching holes in them (into which all else can fit), as far as it goes.'
-		'Then, it will be able to combine strengths of all and weaknesses of none.'
-		'Quite an impressive sight that could be, in the far future.'
-		'Anywhere near now, it is useless.'
+code = {
+	doc:`Code here is separated into modules cleanly to combine easily.
+		Each little viewpoint here has a hole into which any viewpoint can fit — extensibility and non-interference at the same time; with self-knowledge, overhead of any checking can be eliminated.
+		Finding any way to make even more holes and modules from these is always appreciated.
 
+		('code.js' defines the particular shapes this program takes.)`
 
+	define:{ [Symbol()]: 'the public interface of a module' },
+	call() { 'the function that is called on initialization of a module' },
+	rest: 'private variables, visible (but const) from any function of a module',
 
-'The programming language still limits us so: however good, time will soon come to shed it. Another shall be devised (or this one revised — there is no difference).'
-'Some primary basics are gleaming in mind, bright and sharp — but not in code yet.'
-
-	'(Great flexibility, but at sad cost: slowness. With proper optimization it shall not be a problem, but at first, such a language (extension) would merely be a toy.)'
-
-	'Basic constructs (if, while, +, *…) are powerful, but if values are allowed to change meanings of them all in any way they wish (by overriding a function/ality), wonders can be achieved:'
-		'easy symbolic computation (by passing "anything" as all function parameters)',
-			'getting/rewriting the executed code',
-			'const propagation',
-			'auto-optimization (like parallelizing loops over tensors onto GPU)',
-		'non-intrusive promises/futures',
-		'behaving-like-builtin numeric types (like number tensors or multiprecision)',
-		'extending/broadcasting operations onto sequences (like `3*[1,2] -> [3,6]`)',
-		'type inference (more later)',
-		'recording path from hidden variables to output to allow propagating error-of-output to inside (as is done in machine learning).'
-		'(Despite needing a check at every single operation (and/or a function call), branch prediction and JS object-shape-caching may make the slowdown less than expected.)'
-		'(if/while/… must allow arbitrary bodies and passing/returning relevant local vars — a non-trivial rewrite of AST of JS will have to be devised for them.)'
-
-	'Computation itself is powerful, but repeats what is already done too eagerly, without thought or order. They shall be provided.'
-		'Conceptual merging through space and time: no two deeply-equal pure concepts, fine — only one light shall shine against the dark.'
-		'Used in:'
-			'building up the call stack (and merging by-function-and-args if pure and non-random)',
-				'caching results of pure operations, never exploring needlessly',
-				'detecting infinite recursion (and loops)',
-			'reducing memory cost as much as possible',
-				'creating objects, arrays, type instances',
-				'structural match/replace and equivalencies',
-			'exposing conceptual new-ness for any optimization of seeking — an unforgiving burden',
-			'any/all of types for conceptual inference (symbolic-computation-like).'
-		'Merely an extensively-used function merge(o), used to signal purity, creating a hash-table of backrefs on o unless any of its parts have no such hash-table (to allow inter-operation with non-pure).'
-		'With (correct) ref-counting and re-using of freed objects for new ones (and keeping caches and backrefs until memory pressure), merged objects will not allocate memory — still, it requires re-implementing memory management in this garbage-collected JS. No way around it though (still, no perfect solution for memory here).'
-		'Though performance impact should be great, the increase in convenience and *knowing* (and memory savings) should more than offset that.'
-		'(Requires (shallow) equality and hashing; best to express those through a single context — object de/composition and iteration, and forEach/.rewrite. Existence of de/composition also means that conceptual difference should also be done.)'
-
-	'Tweaking code options and picking implementations manually can get tedious; some automatic searching and picking of best is desired. Although the basic network implemented in before.js can do that, focus can be directed better.'
-		{'Though it is not absolutely clear what is the best way of picking best, of extracting traces from random walk or anything for appraisal…'
-			"Perhaps will be picked later. Plenty to do as-is."}
-
-	'Less prioritized are secondaries, like a now-animation-less visual framework, or most convenient parsing/emitting/editing, or others — prior examples of such await consumption in node.js and parsedMap.js and in places beyond existence.'
-
-	'(Words are great, but to merely reach the same expressiveness level in code, a conceptual weight several times the size of this description is required — tertiaries, like measure or randomNumbers near end — not even worth mentioning.)'}
+	obj:{
+		call() { 'makes obj a function' },
+		arrays: ['are merged into one array (used for defining tests)'],
+		allKeys: 'must be enumerable strings.',
+		f: 'Function.env(f) returns the creation environment of f (or creates).'
+	}
+}
 
 
 
@@ -60,37 +28,990 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-code = { define:{ _:void 0 } }
 
 
 
 
 code = {
+	name:'call',
+	define:{
+		tests:[
+			() => {
+				let b = false;
+				call(14, () => b = true).stop().start().finish();
+				return b;
+			},
+		],
+		call:{
+			doc:`Starts a global interpreter loop. Calls x until it cannot be called. Returns an object with .stop()/.start() — fiber of execution, already marked as started; take responsibility for it.
+				An interruptible version of 'while (x && x.call) x = x.call(x); then(x)' (an interpreter, which allows easily overriding executed bodies); throw void to force an interrupt.
+				'…Actually, maybe this should not auto-unwrap JS functions (unless finished).'
+					'Maybe call should be called run instead, for this?'`,
+
+			why:`Compiling code to a machine-native language (and optimizing compilation) is good, but it is not extensible at runtime, and thus has to be shed eventually. Besides, traditionally, optimizations are exclusively aimed for speed/memory, and the code conversion is one way only.
+				Interpreting code is easy to make (compared to a compiler) but slow — but it is the only extensible way. Extensible (conceptual) interpretation is absolutely required, long-term.
+				Also, JS lacks interrupts and pause/resume, what kind of language is this?`,
+
+			combo:`Through extension, optimization may be obtained (just like anything else), for any aim in any way — so interpretation is only a temporary step back.
+				Represent every call-with-args using act (defined elsewhere) to avoid (allocating) closures and rest args, and to allow symbolic execution / easy functionality overriding / result caching / detection of infinite recursion.
+				Not parallel, since that requires a lot of extra effort, in JS or not. Does not have any fancy attention-allocating scheme. Responsible only for doing one thing — execution; do one thing and do it as well as possible. Prefer creating just one fiber, and implement whatever else is needed inside of it.`,
+
+			call(x, then) {
+				const f = ref.init(Fiber);
+				f.then = ref.take(then), f.x = ref.take(x);
+				return f;
+			}
+		},
+	},
+	Fiber:{
+		doc:`Fiber/thread of CPU execution.`,
+		init() { this.then = this.x = this.i = _; this.start() },
+		deinit() {
+			this.stop();
+			this.x = ref.give(this.x, true);
+			this.then = ref.give(this.then, true);
+		},
+		stopped() { return this.i !== _ },
+		stop:{
+			doc:`Stops/pauses execution. To resume, call .start().
+				Will only stop on the next interrupt — to force an interrupt now, throw void.`,
+			call() {
+				if (this.i === _) return;
+				type(this.i, Index);
+				const q = step.qu;
+				if (this.i !== q.length-1)
+					[q[this.i], q[q.length-1]] = [q[q.length-1], q[this.i]];
+				ref.give(q.pop(), true), this.i = _;
+				return this;
+			}
+		},
+		start:{
+			doc:`Starts/resumes execution. To cancel/pause, call .stop().`,
+			call() {
+				if (this.i !== _) return;
+				this.i = qu.length, qu.push(ref.take(this));
+				if (!step.lock) delay(step), step.lock = true;
+				return this;
+			}
+		},
+		finish:{
+			doc:`Finishes execution synchronously, with an optional timelimit.
+				If failed to finish (interrupted by throwing void or timed out), returns false — else returns true (and stops it); re-throws any non-void exception.
+				The callers must be fully ref-tracking (or not manage any resources), like event handlers (ref.finally is used).`,
+			call(ms = _) {
+				try {
+					const start = time.guess();
+					while (ms === _ || time.guess(start) < ms) {
+						item.x = ref.take(item.x.call(ref.give(item.x)));
+						ref.finally();
+						if (!item.x || !item.x.call) {
+							try {
+								if (item.then)
+									item.then(ref.give(item.x, item.x = _));
+							}
+							finally { item.stop() }
+							return true;
+						}
+					}
+					'Should we not signal interrupts with item.x.call()?'
+				} catch (err) { if (err !== _) throw ref.take(item.x), item.stop(), err }
+				return false;
+			}
+		},
+		'Probably should not have wrap(o), should have finish(o), so that directly-executed and interpreted behaviors can be the same.'
+			'…Though then, will we not have to wrap literally every single function node (and inputs) in finish?'
+	},
+	step:{
+		qu:[], lock:false,
+		call() {
+			if (!qu.length) return;
+			step.lock = false;
+			random(qu).finish(5);
+			if (!step.lock) delay(step), step.lock = true;
+		}
+	},
+}
+
+
+
+
+
+
+
+
+code = {
+	define:{
+		trace:{
+			doc:`Creates a wrapper around a callable value that will accumulate all (or those passing a filter) no-interrupt called-function sequences into one trace and replace the first function with the trace, minimizing the overhead of interpretation.
+				'(Can this truly be done separate from acts?)'
+				'(A trace is: functions-passed-through-environment and "return f(g(1),h(a,b))" (using vars if >=2 refs to a node) — or, building up acts, all at once?…)'`,
+			call(o) {
+				""
+			}
+		},
+	},
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+code = {
+	name:'pure',
+	define:{
+		pure:{
+			doc:`Merges an object (by equality of decomposition) with its past instance if an equal exists. All pure acts and structures must be built up using pure.
+				The object will become ref-counted (and given to caller) if it was not already.
+				Specify o.pure to return non-_ to pick a single best/canonical form of data.`,
+			why:`To eliminate any wasted activity, something must ensure that no repetitions are made, and that multiple incarnations refer to the same concept.`,
+			combo:`Deep pure merging allows mapping out a conceptual space most efficiently, and so when combined with having a few methods of estimating what to pick more, leads to sabotaging some measures of good to cycle through possibilities the fastest; ensure that some are opposing.
+				By decomposing code to machine-instructions nodes (making the foundation a real machine rather than a virtual one), which optimize their contextual usage with .pure, perfect code generation could be achieved (or as good as the current self-knowledge).`,
+
+			total:0, same:0,
+			call(o) { 'Ref-aware (take on entry, give on exit, drop on error)'
+				'++.total'
+				'If o && o.pure, const r = o.pure(), if (r !== _) return r.'
+				'For each of decomposition, if equal of o is in its backrefs, ++.same and return it.'
+					'If decomposition is empty, use backrefs of type… everywhere…'
+				'If none, put o into backrefs of least-occupied-at-o-multihash and return o.'
+					'(Creating a multiHash if any do not have it.)'
+			},
+			is:{
+				doc:`Returns a boolean, which is true if the object is pure.`,
+				call(o) {
+					'For any of decomposition, if equal of o is in its backrefs, return true.'
+				}
+			},
+			destroy:{
+				doc:`Makes the object not mergable with. Returns a boolean, which is true when the object was pure.
+					Called on all objects before they are dropped from cache; can also be called before modifying (decomposition of) a not-shared object in-place.`,
+				call(o) {
+					'--.total'
+					'For each of decomposition, if equal of o is in its backrefs, remove and break.'
+				}
+			},
+		},
+		tests:[
+			() => {
+				const a = pure([1,2,3]);
+				if (!pure.is(a)) error('is not pure');
+				if (a !== pure(a)) error('re-merge went wrong');
+				if (a !== pure([1,2,3])) error('did not merge');
+				if (pure.destroy(a) !== true) error('was not pure');
+			},
+			() => {
+				const T = { pure() { return this.a }, a:12 };
+				const a = pure(T), b = pure(T, T.a=13);
+				return a !== b;
+			},
+		],
+	},
+	b:Symbol('backrefs'),
+	backrefs(v) { 'Ensure _/null/numbers/strings/booleans have pools, else return v[b] || null' },
+	eq: 'probably goes here, not in public definitions',
+}
+
+
+
+
+
+
+
+
+
+
+code = {
+	name:'act — the most important but the least straightforward',
+	define:{
+		act:{
+			doc:`Provides a way to purely instantiate a function with args: when passed a function, returns a function that has to be repeatedly called with each (non-void) arg in turn and finally with void: 'build(Act)(1)(2)(3)(func)()', which returns an instance of an act.
+				Call of an act will do what is necessary to compute the function (call callable args then self), and ensure that there is no infinite recursion, and that all functions are extensible by args as needed in any way.
+				The final result may be an earlier instantiation if all dependencies are the same — it is conceptually merged.
+				Overridable by args/function like '.act(next, caller, fiber)->next' (next must have '.call(this)->this', which must then go to next); if fiber is _, set it; if fiber is same, return last computed value; if fiber is different, suspend it and change next to resume-it-then-next. For functions with '.name', behavior is overridable (by args) by a method 'a[.name]' (unless it returns _) — devoid of ceilings, merely floors to re/build on.
+					'(Is there a way to encapsulate/specify these fiber checks closer to fibers?)'
+				If act is used as a function of an act, it will expect two args: (a wrapper of) a function, and a linear sequence (forEach.isLinear). Same role as Function.prototype.apply.
+				The called function must be of a special form; while a parser/emitter for automatic conversion to this form can be made, we are not there yet. No rest args (to save memory), and each first usage of an arg A at N must be 'A=act(N,A)' (can throw to interrupt execution if it needs computing), and no JS built-in constructs must be used (except return/throw), only function calls made by act; do not recurse directly. Returned acts and functions will be computed to compute the result; to return them as values, use wrap(…). The behavior is then fully de/composable and able to be done both with a direct call and within an act, and args can be not computed if not needed.
+					'(Maybe, to allow interoperability with built-in functions, if it has a .length, request all args and call it?)'
+					'(If we require functions to describe every single part of themselves, why do we even need functions, and not just things with a hole for args?)'
+						'(Functions should just be a bootstrap phase…)'
+						'(And, always instantiating may be good if there is lots of uncaching, but extremely bad for CPU caches otherwise. Maybe we should, while keeping function template in memory, store inputs-hash-to-times-computed for each node, and switch to instantiating when there is ≥3 for one hash (or if spent too much time inside one hash?).)'
+							(Should we re-use the backrefs object for this?)
+							(Should we even lift this backref-on-pressure functionality into pure?)`,
+
+			'Should really be split onto methods of Act, because THIS is a monster.'
+				'And, act itself seems unnecessary, only Act is needed…'
+			'And, since just returning an act would make the behavior very different in direct execution and interpreted, should have finish(f), to be used for returns?'
+
+			why:`no idea`,
+
+			call(f,v) {
+				'if f is a number, info.cur is the current act — get its fth arg; if .cur is _, return v.'
+				'assert that both v and info.cur are _.'
+				'if act.is(this), expect exactly two args, of which the first is a wrapper of something with .call, and the second one is a linear sequence.'
+				'assert that f is has .call.'
+				'set info.cur to ref.init(Act), and .set(0,f), and return buildUp.'
+			},
+
+			is:{
+				doc:``,
+				call(o) {
+				}
+			},
+		},
+		'And maybe error/catch/finally, here…'
+			'Named what? Those are not exactly non-colliding. Or, in what namespace?'
+
+		tests:[
+			() => {
+				function plus(a,b) {
+					if (this) a = this.get(0), b = this.get(1);
+						'this can be not-an-act, right? How to check properly, do we NEED Act.is?'
+							'(That might be too hard-coded though…)'
+					return a+b;
+				}
+				function F(x) {
+					if (this) x = this.get(0);
+					return finish(build(Act)(x)(x)(plus)());
+				}
+				'Is there no way to allow function-override, AND arg-request, AND arg-get, all in one?…'
+				return call(finish(build(Act)(2)(F)())).finish() === 4;
+			},
+		],
+	},
+	info:{ cur:_, n:0 },
+	buildUp(v) {
+		'If v is _, merge/return info.cur, clearing cur/n — else info.cur.set(++info.n, v).'
+			'(Actually, with the real build (and Act exposed directly), this is not necessary anymore.)'
+	},
+	Act:{
+		pure:{
+			doc:`Forwards to .pure of the function if any.`,
+			call() {
+			}
+		},
+		call:{
+			doc:``,
+			call() {
+			}
+		},
+		act:{
+			doc:``,
+			call(next, parent) {
+			}
+		},
+		get:{
+			doc:``,
+			call(k) {
+			}
+		},
+		set:{
+			doc:``,
+			call(k,v) {
+			}
+		},
+	},
+}
+
+
+
+
+
+
+'hole(f), allowing self-awareness by easy possibility of relevant conceptual self-replication?'
+	'Any better name?'
+	'How to make substitution actually sane — or at least make it?'
+	'Also, having a stack-tracer without any way to actually stop it is kinda silly.'
+		'How to signal end of unwind, to allow the accumulated code to actually be used?'
+			'Maybe, on creation, be like Promise — pass a function that is passed an on-complete function, and maybe some used-in information for reconstruction.'
+	'(Technically, this functionality is that of maybe-partial bind; holes are left to be filled in later, by normal execution or by an outside promise, potentially many times. The bottom of the hole should be able to be used as the function of an Act (have .call).)'
+		'(Also, the hole object (its bottom) must decompose to all not-reachable-from-others users — on use, add user to self and remove its composition from self. But then all things form a loop with the hole at the bottom being referred to, and the hole at the top(s) referring to stuff…)'
+		'(And to allow both recording of usage and using the record, top(s) and bottom must be separate objects. But, do we even need top(s), since we have .next of acts already more or less ready, only needing something to ensure non-holes are computed?)'
+		'(We do need to preserve ALL that depend on it, but on creation of a hole, we must specify how it will be filled…)'
+			'((And if so, non-intrusive promises are automatically merged with symbolic execution.))'
+	'…Should make all this into a documentation thing.'
+code = {}
+
+
+
+
+
+
+code = {
+	name:'is',
+	define:{
+		is:{
+			doc:`Returns a pure object that matches any instance of the passed type T.
+				The result has .is(v=_) that will generate an instance when passed _ or check whether a value is an instance when passed v (or if v is equal to T), and which can be overriden by T.is.
+				Matching the result with an instance will return an instance or Any{}.
+				To allow type inference, All concept bases (which operate with concrete values) must handle correctly the case where one of the inputs is such a thing (how — is.is?).
+					('…what about any/all of types?')`,
+			why:`Sometimes useful in pattern-matching and type inference, and to augment type-checking with values-representing-types.`,
+			call(T=_) {
+			}
+		},
+	},
+	also:`Make type(is(T)) return T, and make type(is(T), A,B) return Any{All{is(T),is(A)}, All{is(T),is(B)}}?`,
+}
+
+
+
+
+
+code = {
+	name:'patterns',
+	define:{
+
+		Any:{
+			doc:`Matches if any values match, or never with no values to match.
+				Match of any is any of matches: match(x, Any{A,B}) = Any{match(x,A), match(x,B)}.
+				Any and All are completely symmetrical.`,
+			pure:{
+				doc:`If one element or have an empty Any, return one of those, else inline all Any elements and sort (removing duplicates) (mostly by-type for better branch prediction) (if possible?) and return _.
+					'(…Or do we want to turn some interactions of and/or into a single canonical form? Which ones?)'
+						'Like an empty All (always | …) being propagated as output?'
+							'Why is this stand-alone though?'
+							'How to define others to be able to swallow things, like how instances(Number) swallows 1,2,3,4?'
+								'.Any(any)/.All(all)? .Any(v)/.All(v) — there is no structure?'
+									'Is this too much, since any/all are symmetrical?'
+								'inst.is(v), with v swallowed in Any and inst in All?'
+									'(If inst.is(v)=>inst.is(type(v)), then we could divide by-type and have efficiency… Is that too much of a limitation to impose though?)'
+									'But will we ever have any other types of swallowing?'
+									'And, what about any kind of depending-on-match?'
+										'Should .is imply "matching-v will always match inst"?'
+										'(Or should we swallow one on match(inst,v)===All{}? It would not be symmetrical though, right?)'
+						'ab+ac = a(b+c).'
+						'(a+b)(c+d) is ac+ad+bc+bd, which may or may not be less in total size. Search for the smallest representation?'
+							'Should we really be doing such a (limited) search in building the canonical representation though?'
+							'What if we want to search through equivalents for some other purpose, how to organize such a search? And when would we want that?'`,
+				call() {
+				}
+			},
+			match:{
+				doc:`For each part, writes match(part, v) to the Any result.
+					Propagates any possibly-equal parts to output.`,
+				call(v) {
+				}
+			},
+		},
+
+		All:{
+			doc:`Matches if all values match, or always with no values to match.
+				Match of all is all of matches: match(x, All{A,B}) = All{match(x,A), match(x,B)}.
+				All and Any are completely symmetrical.`,
+			pure:{
+				doc:`If one element, return it, else inline all All elements and remove empty Any elements and sort (removing duplicates) (mostly by-type for better branch prediction) (if possible?) and return _.
+					'(Actually, just be as Any.)'`,
+				call() {
+				}
+			},
+			match:{
+				doc:`For each part, writes match(part, v) to the All result.
+					Propagates all possibly-non-equal parts to output.`,
+				call(v) {
+				}
+			},
+		},
+
+		Not:{
+			doc:`Matches if the value does not match.`,
+			pure:{
+				doc:`Turn not-not-not-x into not-x, not-always into never, not-never into always, else return _.`,
+				call() {
+				}
+			},
+			match:{
+				doc:``,
+				call(v) {
+				}
+			},
+		},
+
+		Sequence:{
+			doc:`Matches if values match in a sequence, leaving none.
+				'Does an empty sequence match any-length sequence?'
+					'We need something that matches any-length sequence, but should it be this?'
+						'(…Do we though?)'`,
+			pure:{
+				doc:`If one element, return it, else return _.`,
+				call() {
+				}
+			},
+			match:{
+				doc:``,
+				call(v) {
+				}
+			},
+			//…Should a Sequence have a type, so that it can build instances of it, and represent its concrete syntax?
+				//Then, 'To match instances of a type to a string, override .match to "return build(Sequence)(type)('if')('(')('condition', type2)(')')()".' — how would this built-up representation work with emit though? Do we not need to pass in this instead of type?…
+					//(And "To actually do the match, match(instances(type), 'string').".)
+		},
+
+		//…How would we assign to keys of the parsed value (or emit them)?
+			//Should we have another type for this, Key(obj, k, as)? Not really cow though…
+
+		match:{
+			doc:`Conceptual equality check: describes the situations where a and b are the same. Unless overriden, returns everything if a===b or nothing otherwise.`,
+			why:`Extensible equality is convenient for expressing many kinds of representation checks and selections in a convenient, declarative, and decomposable way.`,
+			combo:`Use match.any/.all to use the result in conditions.
+				With Any/All, allows constructive pattern matching (where constructing a concrete example is essentially free).
+				With also Not, allows more pattern matching.
+				With also instances, allows pattern-matching to all values of a type.
+				With Sequence, allows parsing (reading). With emit, allows emitting (writing).`,
+
+			call(a,b) {
+				'return a===b ? build(All)() : build(Any)(). [But cache the empty All/Any.]'
+				'(To match a written piece to v, "return match(build(Sequence)('[')(']')(), v)" — how to pass in keys of this, for reading/writing?)'
+			},
+			any:{
+				doc:`Checks whether a match can ever match. Returns false if passed an empty Any, true otherwise.`,
+				call(r) {
+				}
+			},
+			all:{
+				doc:`Checks whether a match always matches. Returns true if passed an empty All, false otherwise.`,
+				call(r) {
+				}
+			},
+		},
+
+	},
+}
+
+
+
+
+
+code = {
+	name:'get/set',
+	define:{
+		get:{
+			doc:`Returns the part of an object under a key. If k is _, returns its shape (uint32 length or an array(-like object) or a function-iterator (called like 'iter.call(obj, on)', calling 'on(k)')).
+				Can be overriden if o defines '.get(k)' (which cannot happen just using set).`,
+			call(o, k=_) {
+			},
+
+			isLinear:{
+				doc:`Tests whether the shape of an object is a uint32 length, meaning that it is a sequence.`,
+				call(o) {
+				}
+			},
+
+			length:{
+				doc:`Returns the number of keys in the shape of an object. Fastest for sequences.`,
+				call(o) {
+				}
+			},
+		},
+
+		set:{
+			doc:`Sets the part of an object under a key to value. If v is _, deletes the value of key; if k is _, sets shape to v (mostly useful for pre-allocation); both cannot be _. Returns the object.
+				If the object is owned by set, modifies it in-place — else makes a copy and modifies that; the caller must be ref-tracking. Purity is preserved either way.
+				Can be overriden if o defines '.set(k,v)' (which cannot happen just using set).`,
+
+			impl:`Unless overriden, number/boolean keys are stored as-is (converted to string if needed), string keys are prefixed with ⴵ (Or should we store all non-uint32 keys in the multi-hash table?), (symbols — where? how? Should we extend multi-hash table to allow those inside?) (objects/functions — multi-hash table? But how to store both keys AND values; '{ k:…, v:… }'?)…`,
+
+			call(o, k=_, v=_) {
+			}
+		},
+
+		build:{
+			doc:`A utility function for creating pure objects from their decomposition: 'build(Array)(1)(2)(3)() → [1,2,3]'; equivalent to 'forEach(["…"], (r,w) => { w(1),w(2),w(3) }, Array)'.
+				Accepts the type to create and returns a function that accepts key/value and returns itself. If value is _, key is the value to store next in a sequence; if key is _, value is the new shape; if none are _, falls through to 'set(o,k,v)'; if both are _, finalizes and returns the resulting object.`,
+			call(T) {
+			}
+		},
+
+		slice:{
+			doc:`Creates and returns a view of a sequence, with the specified start/end/step (start=end is an empty sequence); if start/end are less than 0, length of the sequence is added; then start/end/step must be uint32 (step cannot be 0).
+				The resulting sequence gets/sets on the original, and goes from inclusive min(start, end) to exclusive max(start, end), in reverse if end<start, with each next index adding or subtracting step original indexes; outside that is void.
+				Intended to be a very lightweight thing, and is not merged purely.`,
+			call(seq, start, end=_, step=1) {
+			}
+		},
+
+		tests:[
+			() => JSON.stringify(build(Array)(1)(2)(3)()) === '[1,2,3]',
+			() => get(build(Array)(1)(2)(3)()) === 3,
+			() => get(build(Array)(1)(2)(3)(), 1) === 2,
+			() => JSON.stringify(set(build(Array)(1)(2)(3)(), 1, 20)) === '[1,20,3]',
+			() => {
+				const a = ref.take(build(Array)(1)(2)(3)());
+				const after = ref.take(set(ref.give(a, a=_), 1, 20));
+				return JSON.stringify(after) === '[1,20,3]' && a === after;
+				try {
+					const after = ref.take(set(ref.give(a), 1, 20));
+					return JSON.stringify(after) === '[1,20,3]' && after === a;
+				} finally { ref.drop(a) }
+			},
+			() => {
+				const a = ref.take(build(Array)(1)(2)(3)()), b = ref.take(a);
+				try {
+					a = ref.take(set(ref.give(a, a=_), 1, 20));
+					return JSON.stringify(a) === '[1,20,3]' && JSON.stringify(b) === '[1,2,3]';
+				} finally { ref.drop(a), ref.drop(b) }
+			},
+		],
+	},
+}
+
+
+
+
+
+code = {
+	name:'MultiHash',
+	define:{
+		MultiHash:{
+			doc:`Unordered store of arbitrary values, retrieved by their decomposition. Not a key/value store (by default). Iff a cheaper-to-compute hash collides, more expensive (or just different) ones are computed instead.`,
+		},
+	},
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+code = {
+	name:'hash',
+	define:{
+		hash:{
+			doc:`Returns the hash-number of an object, suitable as a key; a shallow hash. If objects are equal, their hashes are equal too, else they are very likely different.`,
+			why:`A way of optimizing retrieval of unchanging objects, used in hash tables.
+				Hashes are chosen to minimize collisions (different-in->same-out); by choosing only functions with an inverse (same-out is only caused by same-in for all values, meaning no collisions) (such as addition or multiplication by a co-prime-with-2³² number, mod 2³²), we minimize collisions (though from inputs and hash, hash seed could be restored).
+				(Since we use multi-hash tables (on hash collision, create a sub-hash-table with a different hash function), there is no need to ensure that similar values have wildly different hashes.)`,
+
+			call(o, depth=0) {
+				if (info.seed === _) info.seed = random(random.max), info.n = random(4);
+				let h = info.seed;
+				"For each in o, mix the hash of key with h, and if the value is not object/function, mix it too."
+				'If depth, for each object/function of o, mix the hash of value (of depth-1) with h.'
+				return h;
+			},
+
+			mix:{
+				doc:`A simple mixing of two hashes (32-bit unsigned integers) by multiplication-by-constant-then-summing.
+					In long chains, should be 'i = mix(i,j)'. Lower bits affect higher bits more.`,
+				call(i,j) {
+					let mult;
+					if (info.n & 1) {
+						if ((info.n >>> 1) & 1)
+							mult = (((i + (i<<12))>>>0) + (i<<29))>>>0; "i * 536875009"
+						else
+							mult = (((i + (i<<12))>>>0) + (i<<25))>>>0; "i * 33558529"
+					} else {
+						if ((info.n >>> 1) & 1)
+							mult = (((i + (i<<26))>>>0) + (i<<29))>>>0; "i * 603979777"
+						else
+							mult = (((i + (i<<22))>>>0) + (i<<30))>>>0; "i * 1077936129"
+					} "Constants were picked to have a min non-2 number of bits."
+					return (mult + j)>>>0;
+				}
+			},
+		},
+
+		Boolean:{ prototype:{ hash() { return this ? 1 : 2 } } },
+		Number:{ prototype:{ hash() {
+			if (this === this>>>0) return this;
+			if (this !== this) return 5;
+			if (this === Infinity) return 6;
+			if (this === -Infinity) return 7;
+			let h = hash.mix(this > 0 ? 9 : 10, info.seed);
+			const n = this, e = Math.floor(Math.log2(Math.abs(n)));
+			h = hash.mix(h,e);
+			n = Math.abs(n) * Math.pow(2, -e);
+			h = hash.mix(h, Math.floor(n = n * Math.pow(2,32)));
+			h = hash.mix(h, Math.floor((n - Math.floor(n)) * Math.pow(2,21)));
+			return h;
+		} } },
+		String:{ prototype:{ hash() {
+			let h = info.seed;
+			for (const i = 0; i < this.length; ++i) h = hash.mix(h, this.charCodeAt(i));
+			return h;
+		} } },
+		Symbol:{ prototype:{ hash() {
+			return hash(this.description || Symbol.keyFor(this) || '');
+		} } },
+	},
+	info:{ seed:0, n:0 },
+}
+
+
+
+code = {
+	name:'eq',
+	define:{
+		eq:{
+			doc:`Checks (shallow) equality of a and b by .get-decomposition.
+				If their prototypes are different, returns false — else, for each key in a or b, checks that a.get(k)===b.get(k).`,
+			why:`Deep conceptual merging both requires structure-based equality checking, and allows getting away with just shallow equality checking.`,
+			impl:`Creates a closure. Is it auto-optimized out, or does it have to be manually optimized away? Should assume the second, and optimize it out…`,
+
+			call(a,b) {
+				if (a === b) return true;
+				if (typeof a !== typeof b) return false;
+				if (typeof a !== 'object' && typeof a !== 'function') return false;
+				if (a[prototype] !== b[prototype]) return false;
+				if (typeof a.get !== 'function' || a.get !== b.get) return false;
+				let r = true;
+				const f = k => { if (a.get(k) !== b.get(k)) throw r = false, forEach.break };
+				if (forEach.isLinear(a) && forEach.isLinear(b)) {
+					forEach(forEach.length(a) < forEach.length(b) ? a : b, f);
+					return r;
+				} else {
+					forEach(a, f), r && forEach(b, f);
+					return r;
+				}
+			},
+
+			cmp:{
+				doc:`Performs a deep comparison.
+					Returns 0 if a and b are equal, and ±n otherwise in a consistent manner (if -n, a comes first; if +n, b comes first).
+					When only ordering by types is wanted, use .typeid instead.`,
+				why:`Hashing potentially-complex-keyed concepts in a consistent manner requires being able to sort those arbitrary keys, which requires a deep comparison operation.`,
+
+				typeid:{
+					doc:`Compares types of a and b in an arbitrary but consistent manner.
+						When passed to [].sort(eq.cmp.typeid), orders same-type values together, for better caching or branch prediction.`,
+					call(a,b) { return typeId(a) - typeId(b) }
+				},
+				call(a,b) {
+					if (a===b) return 0;
+					if (typeof a !== typeof b) return typeof a < typeof b ? -1 : 1;
+					if (typeof a === 'symbol') return self(a.description, b.description);
+					if (typeof a !== 'object' && typeof a !== 'function') return a < b ? -1 : 1;
+					if (typeof a.get !== 'function' || a.get !== b.get) return false;
+						'Also, probably want a/b to be able to override the cmp function, with </…'
+					""
+				}
+			},
+		},
+	},
+	typeid:Symbol('typeid'),
+	typeId(o) {
+		if (o === null) return 1;  if (o === _) return 2;  if (!o[prototype]) return 3;
+		return o[prototype][typeid] || (o[prototype][typeid] = random(random.max));
+	},
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+code = {
+	define:{
+		op:{
+			['**']:{
+				doc:`Exponentiation of two numbers; a raised to the power of b.
+					1**10 → 1; 10**1 → 10; 2**3 → 8; 10**-1 → .1; (-2)**9 → -512; (-2)**9.1 → NaN; 2**-∞ → 0.
+						'1**… or …**0 always return 1 in Python (or C99); is that true here?'
+					Extensible if any operand (left is checked first) defines a '**'(a,b) method.`,
+				call(a,b) {
+					if (canExt('**', a, b)) return doExt('**', a, b);
+					return type(a, Number), type(b, Number), a ** b;
+				}
+			},
+			['*']:{
+				doc:`Multiplication of two numbers — their product; a times b.
+					a*b = b*a; a*1=a. Approximately, a*b*c = a*(b*c).
+					10*0 → 0; 2*2 → 4; -2*3 → -6; ∞*0 → NaN; ∞*∞→∞.
+					Extensible if any operand (left is checked first) defines a '*'(a,b) method.`,
+				call(a,b) {
+					if (canExt('*', a, b)) return doExt('*', a, b);
+					return type(a, Number), type(b, Number), a * b;
+				}
+			},
+			['/']:{
+				doc:`Division of two numbers; a divided by b.
+					Approximately, a = (a/b)*b; a/b = a*(1/b).
+					10/1 → 10; -1/2 → -.5; 5.5/2 → 2.75; 12/5 → 2.4; 0/0 → NaN; 2/0 → ∞.
+					Extensible if any operand (left is checked first) defines a '/'(a,b) method.`,
+				call(a,b) {
+					if (canExt('/', a, b)) return doExt('/', a, b);
+					return type(a, Number), type(b, Number), a / b;
+				}
+			},
+			['%']:{
+				doc:`Remainder of division of two numbers; a modulo b.
+					a = Math.trunc(a/b)*b + (a%b).
+						'On platforms using IEEE 754 binary floating-point, the result of this operation [%] is always exactly representable — must check that the above holds.'
+					10%1 → 0; -1%2 → -1; 5.5%2 → 1.5; 12%5 → 2; 0%0 → NaN; 2%0 → NaN.
+					Extensible if any operand (left is checked first) defines a '%'(a,b) method.`,
+				call(a,b) {
+					if (canExt('%', a, b)) return doExt('%', a, b);
+					return type(a, Number), type(b, Number), a % b;
+				}
+			},
+			['+']:{
+				doc:`Addition — sum of two numbers, or concatenation of two strings.
+					Numbers: a+b = b+a; a+0 = a; a+(0-b) = a-b; a+a = 2*a.
+					Approximately (or if strings), a+b+c = a+(b+c).
+					Strings: ''+a = a+'' = a; (a+b).length = a.length + b.length.
+					10+0 → 10; -2+3 → 1; 5.5+2 → 7.5; -∞+∞ → NaN; -1e100+∞ → ∞.
+					''+'a' → 'a'; 'ab' + 'bc' → 'abbc'.
+					Extensible if any operand (left is checked first) defines a '+'(a,b) method.`,
+				call(a,b) {
+					if (canExt('+', a, b)) return doExt('+', a, b);
+					return type(a, String, Number), type(b, String, Number), a + b;
+				}
+			},
+			['-']:{
+				doc:`Subtraction — difference of two numbers.
+					Numbers: a-b = 0-(b-a); a-0 = a; a-b = -(b-a); a-a = 0.
+					10-0 → 10; -2-3 → -5; 5.5-2 → 3.5; ∞-∞ → NaN; 1e100-∞ → -∞.
+					Extensible if any operand (left is checked first) defines a '-'(a,b) method.`,
+				call(a,b) {
+					if (canExt('-', a, b)) return doExt('-', a, b);
+					return type(a, Number), type(b, Number), a - b;
+				}
+			},
+
+			['<<']:{
+				doc:`Left bitwise shift of a by b bits. Converts them into signed 32-bit integers mod 2³² (rounding to zero) and shifts bits left, filling those missing with 0; only the lowest 5 bits of b are used.
+					10<<0 = 10; 12<<1 = 24; 13<<-1 = -2147483648; NaN<<1 = 0.
+					Extensible if any operand (left is checked first) defines a '<<'(a,b) method.`,
+				call(a,b) {
+					if (canExt('<<', a, b)) return doExt('<<', a, b);
+					return type(a, Number), type(b, Number), a << b;
+				}
+			},
+			['>>']:{
+				doc:`Right signed bitwise shift of a by b bits. Converts them into signed 32-bit integers mod 2³² (rounding to zero) and shifts bits right, propagating sign; only the lowest 5 bits of b are used.
+					10>>0 = 10; 13>>1 = 6; -13>>2 = -4; ∞>>1 = 0.
+					Extensible if any operand (left is checked first) defines a '>>'(a,b) method.`,
+				call(a,b) {
+					if (canExt('>>', a, b)) return doExt('>>', a, b);
+					return type(a, Number), type(b, Number), a >> b;
+				}
+			},
+			['>>>']:{
+				doc:`Right unsigned bitwise shift of a by b bits. Converts them into unsigned 32-bit integers mod 2³² (rounding to zero) and shifts bits right, filling those missing with 0; only the lowest 5 bits of b are used.
+					10>>>0 = 10; 13>>>1 = 6; -13>>>2 = 1073741820; -1>>>0 = 4294967295; NaN>>>2 = 0.
+					Extensible if any operand (left is checked first) defines a '>>>'(a,b) method.`,
+				call(a,b) {
+					if (canExt('>>>', a, b)) return doExt('>>>', a, b);
+					return type(a, Number), type(b, Number), a >>> b;
+				}
+			},
+			['&']:{
+				doc:`Bitwise AND of numbers a and b. Converts them into signed 32-bit integers mod 2³² (rounding to zero) and sets an output bit to 1 only if both corresponding input bits are 1.
+					If inputs are the same sign (and non-zero), result is no greater than either input (after conversion).
+					a&b = b&a; a&b&c = a&(b&c); a&0 = 0. If already int32: a&-1 = a.
+					0&0 → 0; 0&1 → 0; 1&1 → 1; 10&-1 → 10; 7&10 → 2; -3.9&-1 → -3; NaN&-1 → 0; ∞&-1 → 0.
+					Extensible if any operand (left is checked first) defines a '&'(a,b) method.`,
+				call(a,b) {
+					if (canExt('&', a, b)) return doExt('&', a, b);
+					return type(a, Number), type(b, Number), a & b;
+				}
+			},
+			['^']: {
+				doc:`Bitwise exclusive OR of numbers a and b. Converts them into signed 32-bit integers mod 2³² (rounding to zero) and sets an output bit to 1 only if both corresponding input bits are different.
+					Not exponentiation.
+					a^b = b^a; a^b^c = a^(b^c). If already int32: a^0 = a; a^-1 = ~a = -a-1.
+					0^0 → 0; 0^1 → 1; 1^1 → 0; 10^0 → 10; 7^10 → 13; -3.9^-1 → 2; NaN^-1 → -1; ∞^-1 → -1.
+					Extensible if any operand (left is checked first) defines a '^'(a,b) method.`,
+				call(a,b) {
+					if (canExt('^', a, b)) return doExt('^', a, b);
+					return type(a, Number), type(b, Number), a ^ b;
+				}
+			},
+			['|']: {
+				doc:`Bitwise OR of numbers a and b. Converts them into signed 32-bit integers mod 2³² (rounding to zero) and sets an output bit to 1 only if either of corresponding input bits is 1.
+					If inputs are the same sign (and non-zero), result is no less than either input (after conversion).
+					a|b = b|a; a|b|c = a|(b|c); a|-1 = -1. If already int32: a|0 = a.
+					0|0 → 0; 0|1 → 1; 1|1 → 1; 10|0 → 10; 7|10 → 15; -3.9|-1 → -1; NaN&-1 → 0; ∞&-1 → 0.
+					Extensible if any operand (left is checked first) defines a '|'(a,b) method.`,
+				call(a,b) {
+					if (canExt('|', a, b)) return doExt('|', a, b);
+					return type(a, Number), type(b, Number), a | b;
+				}
+			},
+			['~']: {
+				doc:`Bitwise NOT of number a. Converts it into a signed 32-bit integer mod 2³² (rounding to zero) and sets an output bit to 1 only if the input bit is 1.
+					If already int32: ~~a = a; ~a = -a-1.
+					~0 → -1; ~1 → -2; ~-18 → 17; ~NaN → -1; ~∞ → -1.
+					Extensible if the operand defines a '~'(a) method.`,
+				call(a) {
+					if (canExt('~', a)) return doExt('~', a);
+					return type(a, Number), ~a;
+				}
+			},
+			['!']: {
+				doc:`Logical NOT of a. Returns false for ±0, null, NaN, '', void — else true.
+					If already false/true: !!a = a.
+					Extensible if the operand defines a '!'(a) method.`,
+				//'Should also override .match for de/serializing, and such.'
+					//'(All expressions (with priorities/precedences) match to their decompositions or to the next lower priority in turn (or, if the lowest priority, match to the highest priority in brackets.)'
+				call(a) {
+					if (canExt('!', a)) return doExt('!', a);
+					return !a;
+				}
+			},
+
+			/*in: (a,b) => a in b, "check b.get(a)!==_, right?"
+			"get/set, including delete."
+				"…Perhaps we DO have a valid use-case for value-is-void, and that is deletion…"
+			"uno (+/- (achieved with first operand being void, right?) and !/~; forbid void/typeof?)"
+			"array/hash creation, MAYBE."
+			"Return-to-label (break/continue/return/throw) (by throwing a symbol); catch-label."
+				"Most shaky, this one…  but more complex ones do not work well."
+			"Function call."
+			"…And every single other syntax construct."*/
+		},
+		props:{
+			['**']: 'op',
+			['*']: 'op',
+			['/']: 'op',
+			['%']: 'op',
+			['+']: 'op',
+			['-']: 'op',
+			['<<']: 'op',
+			['>>']: 'op',
+			['>>>']: 'op',
+			['&']: 'op',
+			['^']: 'op',
+			['|']: 'op',
+		},
+	},
+	canExt(op,a,b) {
+		return a && type.is(a[op], Function) || b && type.is(b[op], Function);
+	},
+	doExt(op,a,b) {
+		if (a && type.is(a[op], Function)) return a[op](a,b);
+		if (b && type.is(b[op], Function)) return b[op](a,b);
+		error('Did not extend');
+	},
+}
+
+"Can we make something like Number.tests(N): +∞, -∞, NaN, 0, 1, -1, .5, then random?"
+	"Or just Number.get()->iterator(f)."
+	"Or should we make it a part of interval-based, uh, sets/maps?"
+	'(Or, instances(Number) or smth?)'
+
+
+
+
+
+
+
+
+
+
+
+
+
+code = {
+	define:{ _:void 0 },
+	doc:`Though void (undefined, or the shorter void 0, or the even shorter _) can be used in JS as its own value, it is very often used as a special marker value in functions here (like storage). (If such a void value is absolutely required to pass through those functions, use a symbol and special-case its in/out — but such a need should be rare, and decrease in code size is substantial.)`
+}
+code = {
+	name:'error',
+	define:{
+		error:{
+			doc:`Throws an error defined by the first argument.
+				Second argument can be set to true to force storing a stack-trace, or to false to forbid that.`,
+			call(e, stack = false) { throw stack && !(e instanceof Error) ? new Error(e) : e }
+		},
+	}
+}
+
+
+
+
+code = {
+	name:'tests',
+	call() {
+		setTimeout(() => {
+			time.limit(100), test(), setTimeout(() => {
+				time.limit(100), test(), setTimeout(() => {
+					test(), test.log();
+				}, 1000);
+			}, 1000);
+		}, 1000);
+	},
 	define:{
 		tests:[],
 		test:{
@@ -105,14 +1026,40 @@ code = {
 				return b;
 			},
 			log:{
-				doc:`Logs any failed tests (percentage passed, then for each failed test, first 50 chars of their bodies, their exception or their ref-leaks) with console.log/.group/.groupEnd.
+				doc:`Logs any failed tests (percentage passed, then for each failed test, first 50 chars of their bodies, their last exception or ref-leak count) with console.log/.group/Collapsed/End.
 					If all succeeded, logs the average time to execute all tests, and how many times the whole set was executed (and all tests that took more than double the average to run).`,
-				call(...args) {
-					let fail = init(Array);
+				call() {
+					let total = 0;
+					const fail = ref.take(forEach.value(tests, (t,w) => {
+						if (t.runs) total += t.time / t.runs;
+						if (t.err !== _) return t;
+					}, Array));
 					try {
-						""
-					} finally { set(fail) }
-					""
+						const c = console, group = c.groupCollapsed || c.group;
+						if (!fail.length) {
+							let s = 0, n = 0;
+							for (const i = 0; i < fail.length; ++i)
+								s += fail[i].time || 0, n += fail[i].runs || 0;
+							const avgS = (s/n).toFixed(1), avgN = (n / tests.length).toFixed(1);
+							group.call(c, `Tests OK (${avgS} ms for all, done ${avgN} times)`);
+							try {
+								forEach.value(tests, t => {
+									if (!t.runs) return;
+									const ms = t.time / t.runs;
+									if (ms > 2 * total / tests.length) {
+										b = (ms/total*100).toFixed(0);
+										c.log(str(t), 'took', ms.toFixed(2), `ms (${b}%)`);
+									}
+								});
+							} finally { c.groupEnd() }
+						} else {
+							group.call(c, `Passed ${fail.length/tests.length * 100}% tests`);
+							try {
+								for (const i = 0; i < fail.length; ++i)
+									c.log('Failed', str(fail[i]), 'with', fail[i].err);
+							finally { c.groupEnd() }
+						}
+					} finally { ref.give(fail, true) }
 				}
 			},
 		},
@@ -128,125 +1075,34 @@ code = {
 	run(f) {
 		type(f, Function);
 		try {
-			"Also track allocations…"
-			let start = now(), r;
+			let start = now(), active = ref.active, r;
 			try { r = f() }
 			finally { f.time = (f.time || 0) + now(start), f.runs = (f.runs || 0) + 1 }
-			if (r === true || r === void 0) set(f.err), f.err = void 0;
-			else if (f.err !== r) set(f.err), f.err = ref(r);
-			"Also check allocations…"
-		} catch (err) { if (f.err !== err) set(f.err), f.err = ref(err) }
+			if (active !== ref.active)
+				ref.give(r, true), r = 'Created ' + (ref.active - active) + ' extra references';
+			if (r === true || r === _) ref.give(f.err, true), f.err = _;
+			else if (f.err !== r) ref.give(f.err, true), f.err = ref.take(r);
+		} catch (err) { if (f.err !== err) ref.give(f.err, true), f.err = ref(err) }
+	},
+	str(f) {
+		const body = f[Object.string].replace(/\s/g, ' ');
+		return body.length > 50 ? body.slice(0, 50) + '…' : body;
 	},
 }
 
 
-"Should also update definitions to set props:{…} everywhere, not just de/composition."
-
-code = {
-	define:{
-		eq:{
-			doc:`Checks (shallow) equality of a and b by .get-decomposition.
-				If their prototypes are different, returns false — else, for each key in a or b, checks that a.get(k)===b.get(k).`,
-
-			call(a,b) {
-				if (a === b) return true;
-				if (typeof a !== typeof b) return false;
-				if (typeof a !== 'object' && typeof a !== 'function') return false;
-				if (a[prototype] !== b[prototype]) return false;
-				if (typeof a.get !== 'function' || a.get !== b.get) return false;
-				if (forEach.isLinear(a) && forEach.isLinear(b)) {
-					"Get the one with max length, and check equality with forEach of that."
-				} else {
-					"For each key in a or b, if a.get(k)!==b.get(k), return false."
-				}
-			},
-
-			cmp:{
-				doc:`Performs a deep comparison.
-					Returns 0 if a and b are equal, and ±n otherwise in a consistent manner (if -n, a comes first; if +n, b comes first).
-					When only ordering by types is wanted, use .typeid instead.`,
-				typeid:{
-					doc:`Compares types of a and b in an arbitrary but consistent manner.
-						When passed to [].sort(eq.cmp.typeid), orders same-type values together, for better caching or branch prediction.`,
-					call(a,b) { return typeId(a) - typeId(b) }
-				},
-				call(a,b) {
-					if (a===b) return 0;
-					if (typeof a !== typeof b) return typeof a < typeof b ? -1 : 1;
-					if (typeof a === 'symbol') return self(a.description, b.description);
-					if (typeof a !== 'object' && typeof a !== 'function') return a < b ? -1 : 1;
-					if (typeof a.get !== 'function' || a.get !== b.get) return false;
-					""
-				}
-			},
-
-			hash:{
-				doc:`Returns the hash-number of an object, suitable as a key; a shallow hash. If objects are equal, their hashes are equal too.`,
-
-				mix:{
-					doc:`A simple mixing of two hashes (32-bit unsigned integers) by multiplication-by-constant-then-summing.
-						In long chains, should be i = mix(i,j). Lower bits affect higher bits more.
-						Hashes are chosen to minimize collisions (different-in->same-out); by choosing only functions with an inverse (same-out->same-in for all values, meaning no collisions) (such as addition or multiplication by a co-prime-with-2³² number, mod 2³²), we minimize collisions (though from inputs and hash, hash seed could be restored).
-						(Since we, on hash collision, merely create a sub-hash-table with a different hash function (and we rely on JS objects to store our hash tables anyway), there is no need to ensure that similar values have wildly different hashes.)`,
-					call(i,j) {
-						let mult;
-						if (info.n & 1) {
-							if ((info.n >>> 1) & 1)
-								mult = (((i + (i<<12))>>>0) + (i<<29))>>>0; "i * 536875009"
-							else
-								mult = (((i + (i<<12))>>>0) + (i<<25))>>>0; "i * 33558529"
-						} else {
-							if ((info.n >>> 1) & 1)
-								mult = (((i + (i<<26))>>>0) + (i<<29))>>>0; "i * 603979777"
-							else
-								mult = (((i + (i<<22))>>>0) + (i<<30))>>>0; "i * 1077936129"
-						} "Constants were picked to have the min non-2 number of bits."
-						return (mult + j)>>>0;
-					}
-				},
-				call(obj, depth=1) {
-	"…hash should also accept i, or variant (or seed?), to maybe allow different mixing impls or such.", "should it not be level-of-complexity though, starting with min and progressing to max (or even ∞)?  Possible progressions: keys->keys&values(&keys)->…; cross-mix->mix-with-self-after-cross-mix;  maybe combine those into single depth, maybe mix-with-self if !!depth?  Seed should be stored on prototypes or objects, in a symbol — how often would we have a same-composition-different-types situation though? Also, we can't implement eq.cmp without type ids, so eh."
-					if (info.seed === void 0)
-						info.seed = random(random.max), info.n = random(4);
-					const r = typeId(obj);
-					"Would require forEach, unless obj has .hash=[…]."
-					"Maybe, since this operation is as basic as === is, it should not be overridable."
-					"If obj is linear, use forEach to mix hashes as-is."
-						"If not, get an array of its keys, sort it with eq.cmp, and use forEach to mix that."
-				}
-			},
-		},
-	},
-	info:{ seed:0, n:0 },
-	typeid:Symbol('typeid'),
-	typeId(o) {
-		if (o === null) return 1;  if (o === void 0) return 2;  if (!o[prototype]) return 3;
-		return o[prototype][typeid] || (o[prototype][typeid] = random(random.max));
-	},
-
-	/* Number hash example (should probably return input if uint32):
-		if (isNaN(o)) return 5;
-		if (o === Infinity) return 6;
-		if (o === -Infinity) return 7;
-		if (!o) return 8;
-		let r = o > 0 ? 9 : 10;
-		const e = Math.floor(Math.log2(Math.abs(o)));
-		r = ((r * 37 | 0) + e) | 0;
-		o = Math.abs(o) * Math.pow(2, -e);
-		r = ((r * 41 | 0) + Math.floor(o = o * Math.pow(2,32))) | 0;
-		r = ((r * 43 | 0) + Math.floor((o - Math.floor(o)) * Math.pow(2, 53 - 32))) | 0;
-		return r;
-	*/
-}
 
 
 
-"Transform-methods, accepting (r,w) and returning an object (merged/const) with appropriate .get/.set to make it work — keyMap, shuffled, utf16, utf8, lzw…"
-	"Except, we often want to make one outer read to cause many inner reads (advancing the iterator), or possibly none at all — same with writes. get/set do not really allow that capability…"
-	"How to make them work?"
-	"(Probably needs to wait until merge…)"
-	"(Also, should we even make Hash/Equals written-classes?)"
-		"(That MIGHT necessitate merge for those, which requires those — no good.)"
+
+
+
+
+
+
+
+
+
 
 
 
@@ -254,53 +1110,32 @@ code = {
 	"How to organize output? One type for all diffs, composed of the type?"
 	"What about one-directional diffs, as opposed to bi-directional like we had originally?"
 		"With .reverse(from), functionality can be the same at about half the memory cost."
-			"I like that… I like that very much."
-
-
-
-"Actually, even though the functionality network can choose best, it does not have a criteria/function for that (like measure-time), consulting the called function each time."
-	"Criteria, able to modify a branch's cost estimator after execution…"
-		"(And maybe before execution, like on self-recursion?)"
-	"How to add that criteria?"
-		"Should it be a global function, or something more easily changeable during execution, like a stack of global functions?"
-		"Or should the way-to-modify (creator) be left on the cost estimator, somehow?"
-			"This calls for a more general approach of store-creator-on-function, but…"
-				"Would be best to have conceptual types Function, Call{ node, result }, Created{ v, by }, but we are barely starting with conceptual types."
-				"Not being fully conceptual in functions and objects seems like quite a hurdle."
-				"Created.by should accept a func, inputs, output, and return the new func (or modify v after/on each use, somehow) — but…"
-				"And what if the meta-function itself changes, when something else finds a better variant, but Created's is static…"
-"And how to 'leave a fillable slot', a window into absolute chaos from which paths can be pulled out by random walk?… Or how to specify the limitations to which the function conforms, and goals which the variant fulfills best…"
-"Is there a way to write this all down more compactly?"
-
-
-
-
-"Actually, having read DataView's documentation, it may be pointless to use number-type-specific types — merely a DataView on top of a Shared/ArrayBuffer (having methods for getting/setting ANY types) and a type marker is enough."
-
-
-
-"Also, we probably want to separate deinit and, uh, drop/uncache, because we might want to keep back-refs in case they could be re-merged."
-	"(Also, how to allow customizing dropping behavior — how to specify parts that will hold values until deemed no longer necessary, along with their estimated-value, changeable or not (all could be in a Heap if static)?)"
-	"…Could it be done with some form of ref-resurrection — if after deinit the ref-count is not 0, do not decompose?"
-		"How to specify a set of 'safely-droppable objects' (or a heap)?"
-
-
-
-
-"And a way to store/return/wait-on not-yet-available numbers, which could have approximations, which could cause pre-computation/prediction…  Extended promises; would the earlier Later with throttling-except-on-end suffice?"
+code = {}
 
 
 
 
 
 
-"And, represent all (extended) operators as functions, in one namespace, like op['+'](10, [1,2,3])."
-	"Number/String are pre-checked/done; all others must be on objects."
-	"Calling type(left)['+'] if a function, or type(right)['+'] if a function."
-	"(And, represent extension with forEach… or maybe check .isLinear, and do composition ourselves? or with forEach of the longest sequence?)"
-	//"(Symbolic computation requires overridable behavior of operators, if/while/…; then, it is very simple.)"
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'Instead of this, should have basic(arg) and basic(type, result), throwing in non-act mode, to make parallel broadcasting simple (to use).'
+	'…Or is there a better way, that does not require modifying call/act?'
 code = {
 	define:{
 		extend:{
@@ -308,14 +1143,7 @@ code = {
 				For all key paths that lead to values, f(…args[…keys]) will be called.
 				Each input can either be iterable (with a function .get) or a value (without .get); iterables will get decomposed recursively.
 				To allow more efficient extension if needed (like if tensors are on GPU), if all inputs are of the same type T and T.extend is a function, it will be called instead of recursing.
-					"But what about Number+Tensor?"
-						"Could go with type.super(…args)…"
-						"Anything better, not requiring a number to be converted to a tensor?"
-							"(And not requiring that which seems too complicated for us.)"
-						"Call 5 .extend(5,t) and t.extend(5,t) if present?"
-							"First to return non-void wins; if all are void or throw, CPU-extend."
-						"Any other option? There has to be something."
-							"Pass in args as-is, and if it throws, decompose all args (or re-throw if all are decomposed)? Seems like the best solution, honestly…"
+					"But what about Number+Tensor? Should check both, left-first."
 				Iterables have .get()->length|keys and .get(key)->value. (keys here can be an iteratable-by-length-here like an array, or a function, which will be called with this being the object and first arg being the function to repeatedly call with the key.)
 					"(Why aren't we using forEach? Can this and that be reconciled to behave more uniformly?)"
 				If this is void, the result is an array. If this is not void, it is the type that will be constructed and .set of which will be called, either .set(void, length) (to pre-allocate) or .set(key, value).
@@ -342,65 +1170,6 @@ code = {
 	"Should extract equals, and probably multi-hash tables, from this module."
 code = {
 	name:'merging',
-	define:{
-		merge:{
-			doc:`merges an object with its past conceptually-equal instance if it exists.
-				works best when called on every object as a structure is assembled from the bottom up, to achieve deep merging.`,
-			call(o) {
-				if (!o) return o;
-				"Also, should we not merge o's backrefs too (for when/if holes in a merged temp-pattern are filled in)?"
-				try {
-					"should o[prototype].shape be able to be a function, for an iterator?"
-					"should we define a global forEach(array or function or …, callback)?"
-					let min, len;
-					"for each ref, findHash(ref, o); find one with min tableLength, exiting if 1"
-						"o.forEach? or o[prototype].forEach?"
-						"What about findHash(type(o), o)? (and null/void…)"
-					if (isTable(min)) {
-						for (let i=0; i in min; ++i) if (equals(min[i], o)) return min[i];
-					} else if (equals(min, o)) return min;
-					return ref(o);
-				} finally { set(o) }
-					"uhh, we decided to NOT set-args-to-void on function end — calling facility should take care of that for us…"
-						"but how to do freeing that both does not get in rewrite's way AND works before the rewrite? Since merging is such a common operation."
-			}
-		},
-		cached:{
-			doc:`call a function, potentially merging it with a previous call.`,
-			//might just be replaced with Op{…}…
-			call(f, ...args) {
-				""
-			}
-		},
-	},
-
-	//touch type, creating init/deinit/id, extending shape with hashTable
-		//Should this also handle touch-function, giving it .id?
-			//Or even, types (objects) and functions are treated the same, with same gifts?
-		//What do init/deinit do, by default?
-
-
-
-
-
-
-
-
-
-	call() {
-		function uniq(o) { return shared(o) ? 'share' : 'own' }
-		console.log('=== Merging test');
-		"Should be re-done with tests…"
-		let a = init(Array, 1,2,3);
-			"There is currently no Array init-er…"
-			"Should init/deinit be static, or instance methods, on prototype?"
-			"Would it not make more sense to make init/deinit instance methods?"
-				"So we should go to init and do that."
-		a = merge(a);
-		console.log(a, uniq(a), a === merge(init(Array, 1,2,3)), uniq(a));
-		const b = merge(init(Array, a,2,3,4));
-		console.log(b, uniq(b), b === merge(init(Array, a,2,3,4)), uniq(b));
-	},
 
 
 
@@ -419,11 +1188,11 @@ code = {
 	},
 	add(at, o) {
 		let t = tableOf(at);
-		if (t === void 0) t = asTable(at, hashTable);
+		if (t === _) t = asTable(at, hashTable);
 		const hash = type(o && o[prototype].hash, Array);
 		for (let i = 0; i in hash; ++i) {
 			const h = hash[i](o);
-			if (!(h in t)) return Object.define(t, h, o, true, true, false), void 0;
+			if (!(h in t)) return Object.define(t, h, o, true, true, false), _;
 			if (!isTable(t[h])) t = asTable(t,h);
 			t = t[h];
 		}
@@ -432,11 +1201,11 @@ code = {
 	remove(at, o) {
 		let t = tableOf(at);
 		if (!isTable(t))
-			return (type(at)[hashTable] = t===o ? void 0 : t), void 0;
+			return (type(at)[hashTable] = t===o ? _ : t), _;
 		removeImpl.i = 0, removeImpl.o = o, removeImpl.hash = type(o && o[prototype].hash, Array);
 		t = type(at);
 		t[hashTable] = removeImpl(tableOf(at));
-		if (t[hashTable] === void 0) delete t[hashTable];
+		if (t[hashTable] === _) delete t[hashTable];
 	},
 
 
@@ -486,7 +1255,7 @@ code = {
 	asTable(o,h) {
 		const t = { [hashTable]:true };
 		if (o === null) o = self.null || (self.null = {});
-		if (o === void 0) o = self.void || (self.void = {});
+		if (o === _) o = self.void || (self.void = {});
 		if (h === hashTable) {
 			if (h in o) return;
 			o[h] = t;
@@ -502,12 +1271,12 @@ code = {
 		return t;
 	},
 	removeImpl(t) {
-		if (!isTable(t)) return t === self.o ? void 0 : t;
+		if (!isTable(t)) return t === self.o ? _ : t;
 		if (self.i in self.hash) {
 			const h = hash[self.i](self.o);
 			if (h in t) {
 				++self.i, t[h] = self(t[h]);
-				t[h] === void 0 && delete t[h]; ("void does not ref, and cannot be back-ref.")
+				t[h] === _ && delete t[h]; ("void does not ref, and cannot be back-ref.")
 			}
 		} else {
 			let j = 0;
@@ -548,8 +1317,6 @@ code = {
 
 
 
-//pre-defining bytes() for different stuff could be nice.
-	//It could also be nice to be able to define functions AND the method they are (supposed to be) generated by, like "const m=memory(), f(), return(memory(m))"
 
 
 
@@ -577,44 +1344,6 @@ code = {
 
 
 
-code = {
-	name:'Ancient fragment. Ignore it.',
-	call() {
-		const pow = Math.pow;
-		const bin = {
-			['**']: (a,b) => pow(a,b),
-			['*']: (a,b) => a*b,
-			['/']: (a,b) => a/b,
-			['%']: (a,b) => a%b,
-			['+']: (a,b) => a+b,
-			['-']: (a,b) => a-b,
-			['<<']: (a,b) => a<<b,
-			['>>']: (a,b) => a>>b,
-			['>>>']: (a,b) => a>>>b,
-			['&']: (a,b) => a&b,
-			['^']: (a,b) => a^b,
-			['|']: (a,b) => a|b,
-			['<']: (a,b) => a<b,
-			['<=']: (a,b) => a<=b,
-			['>']: (a,b) => a>b,
-			['>=']: (a,b) => a>=b,
-			['===']: (a,b) => a===b,
-			['!==']: (a,b) => a!==b,
-			['==']: (a,b) => a==b,
-			['!=']: (a,b) => a!=b,
-			in: (a,b) => a in b,
-		};
-		const uno = {
-			['+']: x => +x,
-			['-']: x => -x,
-			['!']: x => !x,
-			['~']: x => ~x,
-			void: x => void 0,
-			typeof: x => typeof x,
-		};
-		"and logical… but how to define those, where the unnecessary branch is not computed?"
-	},
-}
 
 
 
@@ -631,34 +1360,8 @@ code = {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+'Ancient. Needs to at least have basics be separated into HTML/SVG.'
+	'And more care with one-node-multiple-elements, like highlight-all-on-hover and/or collapsing.'
 code = {
 	name:"view",
 	define:{
@@ -732,6 +1435,11 @@ code = {
 
 
 
+'ASI in JS just means that newlines are be skipped anywhere except for a few places'
+	'("no LineTerminator here" in formal grammar).'
+	'With a proper parse/emit framework, making a JS (or any other) parser/emitter is exactly as simple as specifying a list of rules, about one per line.'
+		'(Though that would just be the syntactical representation — also have to symbolically execute it once to assimilate.)'
+code = {}
 
 
 
@@ -740,200 +1448,6 @@ code = {
 
 
 
-
-
-
-
-"Twin watcher of this library, it ensures peace.  Without its approval, none shall emit."
-	"Should probably be rewritten with forEach.rewrite."
-code = {
-	name:"match",
-	define:{
-		match:{
-			doc:``,
-			call(...args) {
-				"number/string: match the codepoint/s and advance."
-				"first function and rest of args, or array (only one in in): apply them, return its result."
-					"a function is either a Function .matchString on its class, or a Function."
-					"which returns void if failed to match."
-				"return true and advance if otherwise succeeded, void (and return to start) if not."
-
-				"this.a = match`hello${Number}there` — matches `hello 12 there` if Number matches `12`."
-			}
-		},
-	},
-}
-//ASI just means that newlines can be skipped anywhere except for a few places
-	//("no LineTerminator here"; where semicolons are not inserted:
-		//postfix ++/--, continue/break, return/throw, yield/async).
-	//...by god. NOW it's on, and matching/viewing is required.
-	"match end (of a node) should skip all whitespace (unless match.raw)."
-		"…except, we return not match(), but the semantic value, so can't catch match end, or can we?"
-			"should we instead skip the beginning whitespace? we do not produce either start/end ws in emit."
-			"should we `return match() && value`?"
-				"that will force us to always store it in a var though."
-	"match.go(to: index|void)->index (skipping to next codepoint start)"
-		"the first match.go() remembers the index, and allows parts of cache before it to be dropped."
-	"match.look()->cp|void"
-	"what about match.expect(word), that aborts matching the node if it fails…"
-		"it does need an eqv, `match.expect(w); …act` -> `if (match(w)) act`…"
-"external use should probably be like match.collect(Array, func, ...args)->Array."
-	"what about tab-completion (suggesting characters/classes that are wanted at a place)?"
-		"modify first array, and return an array of suggestions afterwards?"
-	"what about match.splice, for modification?"
-	"how to use node-cache efficiently? how can it be implemented?"
-		"(there was something about preferring the old match if it covered more, too.)"
-		"an array of [pos, …nodes], sorted by potentially-repeating pos."
-			"usually we only add to the end, and backtracking has a time cost."
-			"each node is either a string, or its own cache, yes."
-				"or, what about functions?"
-				"in fact, every branch in value-match must have a representation here."
-	"what about remembering the looked-farthest-index for each subnode?"
-		"…what about remembering subnodes, and not just enclosing?"
-			"should we even do that, can't we just use .toString to get the intended display contents?"
-			"simply enclosing and forgetting the original COULD be very convenient, and semantically appropriate too…"
-				"but won't we lose the remembering-partial-matches, and thus pause/continue, ability?"
-				"but match.collect is intended to allow restoring that ability, with external control."
-					"but what should it do if it runs past the end of the string?"
-					"or if we don't want to re-create the strings stored deeply, for every match?"
-	"what about uniting the cache structure and in/out representations?"
-		"many ways to peer at a position, and all of them lead to the same technician."
-		"(a string is just one such way — but more there are, hidden away.)"
-		"match.extract([pos, …nodes], …values) -> void if it needs to be called more, (what if failed?), anything else for the result?"
-			"but result IS the updating of cache."
-				"if succeeded, zeroth pos will contain a node equal to …values."
-				"return true if need more, false if not."
-			"or perhaps, match.try would be more sly."
-	"another 'external' use would be, for a type with .toString, construct .matchString from that."
-"should also have an eqv, (try-30-strings-in-order)=(construct-prefix-tree-and-.go-with-that)."
-	"would probably make more sense in basic-syntactical iterator viewpoints."
-
-"should have a `if/else if/else if/else` ←→ `switch/case/default` eqv, with if/else preferred."
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-"With fallthrough switch cases, it is possible to restore execution of a function to a certain point efficiently (by passing in a number of where should enter, and going from that — with all scoped resources saved and restored too)."
 
 
 
@@ -950,15 +1464,20 @@ code = {
 		console.log('Pre-network is ready.')
 		this.document && document.body.append('Ready')
 		this.document && (document.body.style.textAlign = 'center');
-		("There shall be no commentary, only functions and dream strings.")
-		"Visit the whole network and re-link the functions better (clean f[code].node, enhance it, )."
 	},
 }
+
+
+
+
+
+'Since we now have de/composition, not only shall emit/parse be joined in usage, but also sequence activity will be just a special case of conceptual equality.'
+	'Still, this was a nice interface.'
 code = {
 	name:'emit — will this have to be rewritten in light of forEach/…?',
 	define:{
 		emit:{
-			doc:`emit a sequence of strings or string-expansions to the serialization context, ignoring void 0.
+			doc:`emit a sequence of strings or string-expansions to the serialization context, ignoring _.
 				to serialize, use String(v) or v.toString() — inside that, use emit.
 				put spaces between values if between same chars or not before/after any of "!\"#%&'()*+,-./:;<=>?@[\\]^\`{|}~" (unlike emit.raw). pass in function(prevChar, nextChar)->value as this to override this behavior if needed.
 				intended to be used inside .toString() { try { emit('content') } finally { return emit() } }, that can be used as a definition of both string-conversion and node-tree-expansion.
@@ -992,7 +1511,7 @@ code = {
 					if (ctx.collects) throw "Tried to collect emissions while already collecting";
 					ctx.collects = true;
 					const start = ctx.length, old = emit.into, prev = ctx.prev;
-					emit.into = this !== void 0 ? this : emit.into, ctx.prev = void 0;
+					emit.into = this !== _ ? this : emit.into, ctx.prev = _;
 					try {
 						++emit.depth;
 						raw(!args.length ? value : [value, ...args]);
@@ -1040,10 +1559,10 @@ code = {
 					else
 						for (let v of values)
 							if (type(v) !== String) raw(v);
-							else if (this === void 0)
-								ctx.prev !== void 0 && raw(space(ctx.prev, v[0])), raw(v);
+							else if (this === _)
+								ctx.prev !== _ && raw(space(ctx.prev, v[0])), raw(v);
 							else if (type(this) === Function)
-								ctx.prev !== void 0 && raw(this(ctx.prev, v[0])), raw(v);
+								ctx.prev !== _ && raw(this(ctx.prev, v[0])), raw(v);
 							else throw "Invalid spacing function passed to emit";
 					easier:{"Non-BMP chars as args to space() are not in the supported base"}
 				} finally { --emit.depth }
@@ -1061,31 +1580,31 @@ code = {
 	end() {
 		if (!emit.depth) {
 			const s = ctx.join('');
-			ctx.prev = emit.into = void 0, ctx.length = 0;
+			ctx.prev = emit.into = _, ctx.length = 0;
 			return s;
 		}
 	},
 	invalidUtf16: /[\ud800-\udbff](?:$|[^\udc00-\udfff])|(?:^|[^\ud800-\udbff])[\udc00-\udfff]/,
 	raw(v) {
-		if (v === void 0 || !v && type(v) === String) return;
+		if (v === _ || !v && type(v) === String) return;
 		if (type(v) === Array) {
 			if (v.length === 0) throw "Tried to emit an empty array";
 			else if (v.length === 1) v = v[0];
-			else if (ctx.collects && emit.depth > 1) return ctx.end = v, ctx.prev = void 0;
+			else if (ctx.collects && emit.depth > 1) return ctx.push(v), ctx.prev = _;
 			else return v[0].call(...v.slice(1));
 		}
 		if (type(v) === String) {
 			if (invalidUtf16.test(v)) throw "Tried to emit an invalid-utf16 string";
-			if (v) ctx.end = v, ctx.prev = v[v.length-1];
+			if (v) ctx.push(v), ctx.prev = v[v.length-1];
 		} else if (type(v) === Number) {
 			type(v, Codepoint);
 			v = String.fromCodePoint(v);
-			ctx.end = v, ctx.prev = v[v.length-1];
+			ctx.push(v), ctx.prev = v[v.length-1];
 		} else if (type(v.toString) === Function) {
-			if (ctx.collects && emit.depth > 1) ctx.end = v, ctx.prev = void 0;
+			if (ctx.collects && emit.depth > 1) ctx.push(v), ctx.prev = _;
 			else v.toString();
 		} else if (type(v) === Function) {
-			if (ctx.collects) ctx.end = v, ctx.prev = void 0;
+			if (ctx.collects) ctx.push(v), ctx.prev = _;
 			else v();
 		} else throw "Tried to emit '" + v + "'";
 	},
@@ -1125,8 +1644,8 @@ code = {
 		if (!depth) {
 			const r = [];
 			for (let i=0; i < a.length; ++i) {
-				if (i && needsSpace(a[i-1], a[i])) r.end = ' ';
-				r.end = a[i];
+				if (i && needsSpace(a[i-1], a[i])) r.push(' ');
+				r.push(a[i]);
 			}
 			return r.join('');
 		} else {
@@ -1143,7 +1662,7 @@ code = {
 		if (type(a) === String) return a;
 		const r = [];
 		for (let i=0; i < a.length; ++i)
-			i && a[i-1] !== ' ' && a[i] !== ' ' && (r.end = ' '), r.end = self(a[i]);
+			i && a[i-1] !== ' ' && a[i] !== ' ' && (r.push(' ')), r.push(self(a[i]));
 		return r.join('');
 	},
 	pretty(a, depth) {
@@ -1151,7 +1670,7 @@ code = {
 		if (a.min > self.line) {
 			const r = [];
 			for (let i=0; i < a.length; ++i)
-				i && (r.end = '\n' + self.spaces.repeat(depth)), r.end = self(a[i], depth+1);
+				i && r.push('\n' + self.spaces.repeat(depth)), r.push(self(a[i], depth+1));
 			return r.join('');
 		}
 		for (let d = deepDepth(a); d >= 0; --d) {
@@ -1166,13 +1685,13 @@ code = {
 			if (v[0].length !== v.length) throw "invalid tagged-template call";
 			const a = [v[0][0]];
 			for (let i=1; i < v.length; ++i)
-				a.end = v[i], a.end = v[0][i];
+				a.push(v[i]), a.push(v[0][i]);
 			return a;
 		}
 	},
-	call() { emit.depth = 0, ctx.collects = false, emit.into = void 0, ctx.prev = void 0
+	call() { emit.depth = 0, ctx.collects = false, emit.into = _, ctx.prev = _
 		const o1 = { toString() {
-			try { emit`as1${void 0}df2` } finally { return emit() }
+			try { emit`as1${_}df2` } finally { return emit() }
 		} };
 		const o2 = { toString() {
 			try { emit('{..', o1, '..}') } finally { return emit() }
@@ -1181,6 +1700,34 @@ code = {
 		console.log('prettier:\n' + emit.prettyPrinted(o2, '  ', 10));
 	},
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1202,10 +1749,11 @@ code = {
 				(And these methods are sync. While these methods could check for promises and return a promise if any are detected, that would make the code much more complex and repetitive (and slightly slower) (and dependent on a particular definition of async), for practically no gain. Check for asynchonicity elsewhere, where it is more suited.)`,
 
 			doc:`
-				For each key that makes up obj, on.call(obj, key, write = void 0), synchronously.
+				For each key that makes up obj, on.call(obj, key, write = _), synchronously. Returning a value or calling write(…) will write it to output.
 				Combines [].forEach/.map/.filter into a more general function.
 				Simultaneously reads and writes; see .read/.write for details. To only read (and pass void as write inside on), do not pass to.
-				Throw forEach.break from on to exit the loop early (result, if any, will still be finalized).`,
+				Throw forEach.break from on to exit the loop early (result, if any, will still be finalized).
+				If to is the write-function passed to on, will flatten — write to the last-requested object. Write of an outer callback should not be used in an inner callback (it will not write to outer object).`,
 			read:`
 				To read an object, it must provide a way to decompose itself into parts.
 				.get-decomposition: obj.get(key)->value, obj.get()->length|keys (keys is a function (called like f.call(obj, on)) or have .get->length; no keys must be void).
@@ -1221,59 +1769,66 @@ code = {
 			builtinIterableProtocols:`
 				Not usable because they allocate hideously: for each iteration, a new object, exactly as the spec says (in Node.js (10.15), 40 bytes per iteration) — which means very noticeable garbage-collection stops in anything like tight loops.
 				More, they depend on Symbol.iterator, and since we often want to iterate over all properties of an object, including symbols in iterations is only possible through more allocation (for the result of Reflect.ownKeys or Object.getOwnPropertySymbols). (And if we want to be fully generic with iteration, we have to consider getters/setters too, detecting which either depends on deprecated methods OR allocates memory (AND complicates handling of values everywhere, anyway) (…OR both, like with Node.js (10.15), which allocates 16 bytes per function call).)`,
-			refs:`Everything this function family touches is assumed to be properly ref-counting — in particular, returning ref-d results/keys (caller is responsible for unref-ing both args and result).`,
-			void:`Synonym for undefined, or void 0 (shorter). Using it as a special marker value (everywhere) and not a real value allows some things to be shorter and more convenient, such as not returning anything from .set to not change this (not forcing 'return this'), or testing for a key's existence with .get (not forcing .has).`,
+			void:`Synonym for undefined, or _ (shorter). Using it as a special marker value (everywhere) and not a real value allows some things to be shorter and more convenient, such as not returning anything from .set to not change this (not forcing 'return this'), or testing for a key's existence with .get (not forcing .has).`,
 
-			call(obj, on, to = void 0) {
+			call(obj, on, to = _) {
 				type(obj.get, Function), type(on, Function);
-				if (to !== void 0) {
+				if (to !== _) {
 					type(to.prototype.set, Function);
-					info.o.push(init(to));
-					info.f.push(ref(to.prototype.set));
+					if (to !== write) info.o.push(ref.take(init(to)));
+					else if (info.o.length) info.o.push(ref.take(last(info.o)));
+					else error('No object to write to');
+					info.f.push(ref.take(to.prototype.set));
 					info.n.push(0);
-				} else info.n.push(void 0);
+				} else info.n.push(_);
+				"If (after taking ref) type(obj)===to and !ref.shared(obj) and it is linear (maybe?), should write to just-read keys immediately, with a cache for those keys that are not yet free."
 				try {
-					const f = obj.get();
+					const f = ref.take(obj.get());
 					try {
 						if (f === (f>>>0))
-							for (let i=0; i < f; ++i) set(on(i, to && write));
+							for (let i=0; i < f; ++i) write(on(i, to && write));
 						else if (type.is(f, Function)) {
-							info.on.push(ref(on)), info.arr.push(ref(obj));
-							try { set(f.call(obj, iter)) }
-							finally { set(info.arr.pop()), set(info.on.pop()) }
+							info.on.push(ref.take(on)), info.arr.push(ref.take(obj));
+							try { f.call(obj, iter) }
+							finally { ref.drop(info.arr.pop()), ref.drop(info.on.pop()) }
 						} else {
 							type(f.get, Function);
 							const r = len(f.get());
 							for (let i=0; i < r; ++i) {
-								const key = f.get(i);
-								try { set(on(key, to && write)) }
-								finally { set(key) }
+								const key = ref.take(f.get(i));
+								try { write(on(key, to && write)) }
+								finally { ref.drop(key) }
 							}
 						}
 					} catch(err) { if (err !== forEach.break) throw err }
-					finally { set(f) }
-					if (to !== void 0) return write(), ref(last(info.o));
+					finally { ref.drop(f) }
+					if (to !== _) return write(), ref.give(info.o.pop());
+				} catch (err) {
+					if (to !== _) ref.drop(info.o.pop());
+					throw err;
 				} finally {
-					if (to !== void 0)
-						set(info.o.pop()), set(info.f.pop());
+					if (to !== _) ref.drop(info.f.pop());
 					info.n.pop();
 				}
 			},
 
-			key:{
-				doc:`Alias for forEach, provided for symmetry with forEach.value.`,
-				call(obj, on, to = void 0) {
-					self[code] = forEach[code];
-					return forEach(obj, on, to);
-				}
+			//'Maybe we should have forEach for multiple objects?'
+				//'…Should All override forEach? How; with obj.forEach(on, to) — should add that?'
+
+			in:{
+				doc:`For each key of an object, execute on, and accumulate results.
+					Alias for forEach, provided for symmetry with forEach.of.
+					For each key that makes up obj, on.call(obj, key), synchronously.`,
+				call(obj, on, to = _) { return forEach(obj, on, to) }
 			},
-			value:{
-				doc:`Like forEach, but instead of passing keys, passes values.
+			of:{
+				doc:`For each value of an object, execute on, and accumulate results.
+					Like forEach, but instead of passing keys, passes values.
 					For each value that makes up obj, on.call(obj, value), synchronously.`,
-				call(obj, on, to = void 0) {
-					info.len.push(ref(on));
+				call(obj, on, to = _) {
+					info.len.push(ref.take(on));
 					try { return forEach(obj, valueIter, to) }
-					finally { set(info.len.pop()) };
+					finally { ref.drop(info.len.pop()) };
 				}
 			},
 
@@ -1282,73 +1837,75 @@ code = {
 					Often faster than counting one-by-one.`,
 				call(obj) {
 					type(obj.get, Function);
-					const f = obj.get();
+					const f = ref.take(obj.get());
 					try {
 						if (f === (f>>>0)) return f;
 						else if (type.is(f, Function)) {
 							info.len.push(0);
-							try { set(f.call(obj, count)); return last(info.len) }
+							try { f.call(obj, count); return last(info.len) }
 							finally { info.len.pop() }
 						} else {
 							type(f.get, Function);
 							return len(f.get());
 						}
-					} finally { set(f) }
+					} finally { ref.drop(f) }
 				}
 			},
 			isLinear:{
 				doc:`Returns whether obj is a linear sequence, like an array.`,
 				call(obj) {
 					type(obj.get, Function);
-					const f = obj.get();
+					const f = ref.take(obj.get());
 					if (f === (f>>>0)) return true;
-					else return set(f), false;
+					else return ref.drop(f), false;
 				},
 			},
 			rewrite:{
 				doc:`
+					"…Maybe remove it and force relying on forEach?"
+						"But for string parsing, that would force doubling the input in-memory."
 					Like forEach, but inverses control over reading keys, allowing going back and forth in the input key list.
 					Controller function f (replacing on) is called (once) like f.call(obj, read, write). Inside, write(key, value) will write, read()->key|void will read next, read(index) will go (back) to index (and return old index) (not key, even though they are the same for arrays), read(forEach.length) will return total number of input keys (always pre-computed).
 					To only read, pass void as to; to only write, pass void as obj. Irrelevant functions-parameters to f will be void.
 					Must not be used with infinite collections.`,
-				call(obj = void 0, f, to = void 0) {
+				call(obj = _, f, to = _) {
 					type(f, Function);
-					if (obj !== void 0) {
+					if (obj !== _) {
 						type(obj.get, Function);
-						const f = obj.get();
+						const f = ref.take(obj.get());
 						try {
 							if (f === (f>>>0)) {
-								info.len.push(f), info.arr.push(f);
+								info.len.push(ref.take(f)), info.arr.push(ref.take(f));
 							} else if (type.is(f, Function)) {
-								info.arr.push(init(Array)), info.len.push(0);
-								try { set(f.call(obj, addKey)) }
-								catch (err) { set(info.arr.pop()), info.len.pop(); throw err }
+								info.arr.push(ref.take(init(Array))), info.len.push(0);
+								try { f.call(obj, addKey) }
+								catch (err) { ref.drop(info.arr.pop()), info.len.pop(); throw err }
 							} else {
 								type(f.get, Function);
-								info.len.push(len(f.get())), info.arr.push(f);
+								info.len.push(len(f.get())), info.arr.push(ref.take(f));
 							}
-						} finally { set(f) }
+						} finally { ref.drop(f) }
 						info.on.push(0);
 					}
 					try {
-						if (to !== void 0) {
+						if (to !== _) {
 							type(to.prototype.set, Function);
-							info.o.push(init(to));
+							info.o.push(ref.take(ref.init(to)));
 							try {
 								info.n.push(0);
-								info.f.push(ref(to.prototype.set));
+								info.f.push(ref.take(to.prototype.set));
 								try { "If no end is in sight, try try try."
-									try { set(f.call(obj, obj && next, write)) }
+									try { f.call(obj, obj && next, write) }
 									catch(err) { if (err !== forEach.break) throw err }
-									return write(), ref(last(info.o));
-								} finally { set(info.f.pop()), info.n.pop() }
-							} finally { set(info.o.pop()) }
+									return write(), ref.give(info.o.pop());
+								} finally { ref.drop(info.f.pop()), info.n.pop() }
+							} catch (err) { ref.drop(info.o.pop()); throw err }
 						} else
-							try { set(f.call(obj, obj && next, void 0)) }
+							try { f.call(obj, obj && next, _) }
 							catch(err) { if (err !== forEach.break) throw err }
 					} finally {
-						if (obj !== void 0)
-							info.len.pop(), set(info.arr.pop()), info.on.pop();
+						if (obj !== _)
+							ref.drop(info.len.pop()), ref.drop(info.arr.pop()), info.on.pop();
 					}
 				}
 			},
@@ -1356,18 +1913,20 @@ code = {
 		Array:{
 			prototype:{
 				get(k) {
-					if (k===void 0) return this.length;
-					if (k !== (k>>>0)) throw "Tried to get in an array at not-an-index";
-					return ref(this[k]);
+					if (k === _) return this.length;
+					if (k !== (k>>>0)) error("Tried to get in an array at not-an-index");
+					return this[k];
 				},
 				set(k,v) {
-					if (k===void 0) {
-						if (v === void 0) return;
-						if (v !== (v>>>0)) throw "Tried to set length of an array to not-an-index";
+					if (k===_) {
+						if (v === _) return;
+						if (v !== (v>>>0)) error("Tried to set length of an array to not-an-index");
 						this.length = v;
 					} else {
-						if (k !== (k>>>0)) throw "Tried to set in an array at not-an-index";
-						if (this[k] !== v) ref(v), set(this[k]), this[k] = v;
+						if (k !== (k>>>0)) error("Tried to set in an array at not-an-index");
+						if (!ref.counted(this))
+							error('Cannot take responsibility if irresponsible');
+						ref.take(v), ref.drop(this[k]), this[k] = v;
 					}
 				},
 			}
@@ -1379,17 +1938,19 @@ code = {
 			init(h) { if (!h.o) h.o = {} },
 			prototype:{
 				get(k) {
-					if (k===void 0) return forEachInHash;
+					if (k===_) return forEachInHash;
 					if (typeof k !== 'string') throw "Tried to get in a Hash at not-a-string";
-					return ref(this.o[k]);
+					return this.o[k];
 				},
 				set(k,v) {
-					if (k===void 0) {
-						if (v !== void 0) throw "Tried to set length of a Hash";
+					if (k===_) {
+						if (v !== _) throw "Tried to set length of a Hash";
 					} else {
 						if (typeof k !== 'string') throw "Tried to set in a Hash at not-a-string";
-						if (this.o[k] !== v) ref(v), set(this.o[k]), this.o[k] = v;
-						if (v === void 0) delete this.o[k];
+						if (!ref.counted(this))
+							error('Cannot take responsibility if irresponsible');
+						ref.take(v), ref.drop(this.o[k]), this.o[k] = v;
+						if (v === _) delete this.o[k];
 					}
 				},
 			}
@@ -1398,23 +1959,23 @@ code = {
 			prototype:{
 				textEncoding:`utf16`,
 				get(k) {
-					if (k===void 0) return this.length;
+					if (k===_) return this.length;
 					if (k !== (k>>>0)) throw "Tried to get in an array at not-an-index";
 					return this.charCodeAt(k);
 				},
 				set(k,v) {
-					if (v===void 0)
+					if (v===_)
 						return type(this) === Array ? this.join('') : this;
 					if (typeof this==='string') {
-						const a = init(Array);
+						const a = ref.take(init(Array));
 						try {
 							this && a.push(this);
 							String.prototype.set.call(a,k,v);
-							return a;
-						} catch (err) { set(a); throw err }
+							return ref.give(a);
+						} catch (err) { ref.drop(a); throw err }
 					} else if (type(this) === Array) {
-						if (this.length >= 16 && pow2(this.length)) {
-							{"Assuming a re-allocation happens, joining might take less memory."}
+						if (this.length === 16) {
+							{"Assuming a re-allocation happens, joining may take less memory."}
 							let len = 0;
 							for (const i=0; i < this.length && len < this.length*4; ++i)
 								len += this[i].length;
@@ -1424,23 +1985,10 @@ code = {
 						if (typeof v==='string') this.push(v);
 						else if (v === (v>>>0)) this.push(String.fromCharCode(v));
 						else type(v, String, Index);
-					} else throw "Invalid this for String..set";
-
-					if (k===void 0) {
-						if (v === void 0) return;
-						if (v !== (v>>>0)) throw "Tried to set length of an array to not-an-index";
-						this.length = v;
-					} else {
-						if (k !== (k>>>0)) throw "Tried to set in an array at not-an-index";
-						if (this[k] !== v) ref(v), set(this[k]), this[k] = v;
-					}
+					} else throw "Invalid this for String.prototype.set";
 				},
 			}
 		},
-		//"And Map/Set(/WeakMap/WeakSet), right?"
-			//"Map/WeakMap already have .get/.set, which we use in some places, though."
-
-		props:{ get:'forEach', set:'forEach' },
 
 		tests:[
 			() => {
@@ -1456,9 +2004,7 @@ code = {
 					v===3 && (w(0), w(0));
 					v!==2 && w(v*2);
 				}, Array);
-				try {
-					return JSON.stringify(a) === '[2,0,0,6,80]';
-				} finally { set(a) }
+				return JSON.stringify(a) === '[2,0,0,6,80]';
 			},
 			() => forEach.length([1,2,3]) === 3,
 			() => forEach.length(Hash.prototype) === 0,
@@ -1467,51 +2013,50 @@ code = {
 			() => {
 				const a = forEach.rewrite([1,2,3,40], function(r,w) {
 					w(0);
-					for (let k = r(); k !== void 0; k = r()) k%2 === 0 && w(this.get(k)*2);
+					for (let k = r(); k !== _; k = r()) k%2 === 0 && w(this.get(k)*2);
 					r(0), w(0);
-					for (let k = r(); k !== void 0; k = r()) k%2 === 1 && w(this.get(k)*2);
+					for (let k = r(); k !== _; k = r()) k%2 === 1 && w(this.get(k)*2);
 					w(0);
 					throw forEach.break; ("Same as returning, in ".rewrite)
 				}, Array);
-				try {
-					return JSON.stringify(a) === '[0,2,6,0,4,80,0]';
-				} finally { set(a) }
+				return JSON.stringify(a) === '[0,2,6,0,4,80,0]';
 			},
 			() => forEach.rewrite('hello', function(r,w) {
-				for (const k = r(); k !== void 0; k = r())
+				for (const k = r(); k !== _; k = r())
 					w(this.get(k)), w(this.get(k) + 1), w(this.get(k)), w(32);
 			}, String) === 'hih efe lml lml opo ',
-			() => forEach.rewrite(void 0, (r,w) => {
+			() => forEach.rewrite(_, (r,w) => {
 				w('this'), w(' '.charCodeAt()), w('str');
 			}, String) === 'this str',
 		],
 	},
 	info:{ f:[], o:[], n:[], on:[], arr:[], len:[] },
 	len(r) {
-		if (r !== (r>>>0)) throw set(r), "The decomposing object should be linear (obj.get().get() should be an index)";
+		if (r !== (r>>>0)) ref.take(r), ref.drop(r),
+			error("The decomposing object should be linear (obj.get().get() should be an index)");
 		return r;
 	},
 	last(a) { return a[a.length-1] },
 	count(k) {
-		if (k === void 0) throw "A void .get-decomposition key encountered";
+		if (k === _) error("A void .get-decomposition key encountered");
 		++info.len[info.len.length-1];
 	},
 	iter(k) {
-		if (k === void 0) throw "A void .get-decomposition key seen";
-		last(info.on).call(last(info.arr), k, last(info.n) && write);
+		if (k === _) error("A void .get-decomposition key seen");
+		write(last(info.on).call(last(info.arr), k, last(info.n) && write));
 	},
 	valueIter(k,w) {
-		const v = this.get(k);
+		const v = ref.take(this.get(k));
 		try { last(info.len).call(this, v, w) }
-		finally { set(v) }
+		finally { ref.drop(v) }
 	},
 	addKey(k) {
-		if (k === void 0) throw "A void .get-decomposition key detected";
-		++info.len[info.len.length-1], info.arr.push(ref(k));
+		if (k === _) error("A void .get-decomposition key detected");
+		++info.len[info.len.length-1], info.arr.push(ref.take(k));
 	},
 	next(i) {
 		const on = last(info.on), arr = last(info.arr), len = last(info.len);
-		if (i === void 0) {
+		if (i === _) {
 			if (on >= len) return;
 			if (typeof arr === 'number') return info.on[info.on.length-1]++;
 			return arr[info.on[info.on.length-1]++]];
@@ -1522,15 +2067,20 @@ code = {
 		return on;
 	},
 	write(k,v) {
-		if (k !== void 0 && v === void 0) v = k, k = [info.n[info.n.length-1]++;
+		if (k === _ && v === _) return;
+		if (k !== _ && v === _) v = k, k = [info.n[info.n.length-1]++;
 		const r = last(info.f).call(last(info.o), k, v);
-		if (r !== void 0 && r !== last(info.o))
-			info.o[info.o.length-1] = set(last(info.o), void 0, r);
+		if (r !== _ && r !== last(info.o))
+			ref.drop(last(info.o)), info.o[info.o.length-1] = ref.take(r);
 	},
 	forEachInHash(on) { let k; if (this.o) for (k in this.o) on(k) },
-	pow2(n) { return !(n & (n-1)) },
 }
+"Actually, should parsing stuff really use .rewrite, or should it actually all use forEach?"
 
+"Transform-methods, accepting (r,w) and returning an object (merged/const) with appropriate .get/.set to make it work — transform, shuffled, utf16, utf8, lzw, map (only on write, mapping input key groups to output key groups; has to be integrated with the forEach and its current/last read/write indexes (needs two new indexes? Or should it even keep track itself?))…"
+	"Except, we often want to make one outer read to cause many inner reads (advancing the iterator), or possibly none at all — same with writes. get/set do not really allow that capability…"
+	"How to make them work? Make them classes that override .get/.set to forward to their values?"
+	'(Put them in a namespace? What namespace?)'
 
 
 
@@ -1551,7 +2101,7 @@ code = {
 				unmarked objects return void from mark(o) after entering.`,
 			enter:{
 				doc:`enter a marking context`,
-				call() { ctx.end = void 0 }
+				call() { ctx.push(_) }
 			},
 			leave:{
 				doc:`leave a marking context after entering`,
@@ -1559,20 +2109,20 @@ code = {
 					if (!ctx.length) throw "must enter a marking context before leaving it";
 					if (ctx.length === ctx.notch) {
 						for (let i=0; i < notchMarked.length; ++i)
-							notchMarked[i][notch] = void 0;
+							notchMarked[i][notch] = _;
 						notchMarked.length = 0;
 						ctx.notch = 0;
 					}
-					ctx.end;
+					ctx.pop();
 				}
 			},
 			etch:{
 				doc:`leave a spot on an object which holds marks, merely to speed up marking.`,
-				call(o) { o[notch] = void 0; return o }
+				call(o) { o[notch] = _; return o }
 			},
-			call(o, v = void 0) {
+			call(o, v = _) {
 				if (!ctx.length) throw "must enter a marking context before marking";
-				if (v === void 0) {
+				if (v === _) {
 					if (ctx.length === ctx.notch) return o[notch];
 					if (ctx[ctx.length-1]) return ctx[ctx.length-1].get(o);
 				} else {
@@ -1590,246 +2140,6 @@ code = {
 	notch:Symbol('mark.etch'),
 	notchMarked:[],
 	ctx:[],
-}
-code = {
-	name:"refs — quite a few rough spots.",
-	define:{
-		init:{
-			doc:`constructs/inits and returns an object of a type, possibly pulling it from cache.
-				built-in object creation methods should be replaced with a call to init.
-				'new T(...args)' → 'init(T, ...args)'.
-				'[…]' → 'init(Array, …)'.
-				'{…:…}' → 'init(Object, init(Array, …), init(Array, …))'.`,
-			count:0, min:void 0,
-			call(T, ...args) {
-				if (type(T) === Function) {
-					if (T === String) return '';
-					if (T === Number) return 0;
-					if (T === Boolean) return false;
-					if (T === Symbol) return T(...args);
-					return new T(...args);
-				}
-				type(T, Object);
-				if (!T.prototype) throw "called init on a type without .prototype";
-				type(T.prototype, Object, Function);
-				let o;
-				if (T.empty && type(T.empty, Array).length) o = T.empty.end, o[refs] = 1;
-				else {
-					o = Object.create(T.prototype), o[refs] = 1;
-					if (T.shape && type(T.shape, Array)) {
-						for (let i=0; i < T.shape.length; ++i)
-							o[T.shape[i]] = void 0;
-						if (!T.shape.free) seal(o);
-					}
-					++self.count;
-				}
-				type(T.init) === Function && T.init(o, ...args);
-
-				if (self.min === void 0) self.min = memory();
-				else if (memory() < self.min) self.min = memory();
-				if (memory(self.min) > 256e6) self.min = void 0, cleanNow();
-
-				return o;
-			}
-		},
-		ref:{
-			doc:`A shorter alias for set(void 0, void 0, o).
-				Use to push responsibility for unref-ing onto somebody else, like 'return ref(a[i])' (but 'return f()') or 'a.push(ref(v))', with consequent 'set(value)' to unref. Caller/creator is responsible for unref-ing both inputs and outputs (with set(o)).`,
-			call(o) { return set(void 0, void 0, o) }
-		},
-		set:{
-			doc:`Reference-counting (on objects/functions) set/write/change operation.
-				Caller/creator is responsible for ref/unref of created resources — since this is very inconvenient to remember, should be isolated to the lowest level possible, like the language.
-				symbols or non-enumerable properties are not ref-counted.
-				all assignments (including finally dropping vars to void) should be rewritten to use it (unless proven to be unneeded).
-				will not collect cycles easily — use set.join or implement garbage collection for that.
-				only things created with init will ref-count — use set.mark to adopt a structure to ref-count.
-				'a.k = b' → 'set(a, "k", b)'; 'a = b' → 'set(a, void 0, b)'.
-				'a.k = f(v, g())' → 'a.k = f(set(0,0,v), g())' (do not ref results of operations/functions).
-				'delete a.k' → 'set(a, "k"), delete a.k'.
-				'set(o,k, v1), set(o,k, v2)' → 'v1, set(o,k, v2)'.
-				…what about re-defining a value to be get/set? And (re-)defining a value.
-					probably have to re-define those too, huh?`,
-			join:{
-				doc:`joins reference counters of two ref-counted things, allowing cycles to be collected.
-					do not join if no circular references are known.
-					for each edge between two different nodes in a ref cycle, call set.join(o, o[k]).
-					(for a two-node trivial cycle/loop/circuit, it must be called twice.)
-					when the cycle breaks, set.split can be called for each edge to re-allow separate collection (though not necessary).`,
-				report:`
-In reference counting, breaking loops is usually accomplished with 'weak references', to not increment ref-count selectively, based on program knowledge.
-For example, in tree structures, parent and siblings references should be weak references.
-If aiming to ref-count on JS objects, weak refs do not fit their dynamic nature (have to either store another object of which keys are weakly-referenced, or mark entire objects as weakly-referencing (and/or have a special weak-reference object class), neither of which helps with saving memory).
-Besides, they are brittle for references to objects holding weak refs — all further manipulations require detailed program-level knowledge of how it was made, to ensure use-after-free is never possible. It makes a generic auto-rewrite much more complicated, and intertwines data and code.
-Garbage collection is always possible, but there is an overhead, and the freeing is delayed arbitrarily — which doesn't help with re-using the same objects to save memory in tight loops and such.
-But there is another solution: joining ref-counts — an object's ref-counter can point to another object with a ref-counter (which fits well if object references are fitted in the NaN part of 8-byte float numbers, as is usually the case in JS).
-Semantically, the tree example would have one ref-count for the whole tree, and not always-1 pseudo-count on non-root nodes — which is much clearer.
-It can never free potentially-used objects, so is not brittle in that regard, and does not require knowledge after creation.
-Perfect for working with static structures, since it can never leak if cycles do not ever separate.
-The only brittle part is splitting ref-counts, which requires program-level knowledge of how many refs there are to each object — but that is exactly what working with weak refs requires, and is only limited to dynamic cycle breaking.
-(While weak references here are technically supported with symbols or non-enumerable properties, it is more for being able to use a mostly-non-allocating for-in loop.)`,
-				call(a,b) {
-					if (!refable(a) || !refable(b)) return;
-					if (refable(a[refs])) a = a[refs];
-					if (refable(b[refs])) b = b[refs];
-					type(a[refs], Index), type(b[refs], Index);
-					if (!a[refs] || !b[refs]) throw "joined cycles must not be already collected";
-					if (a !== b) a[refs] += b[refs], b[refs] = a;
-					--a[refs];
-				}
-			},
-			split:{
-				doc:`after set.join(o, o[k]), call set.split(o, o[k]) to split reference counts.
-					if b has any non-cycle refs, their count must be precisely passed as bRefs — else one or the other will never be collected.`,
-				call(a,b, bRefs = 0) {
-					if (!refable(a) || !refable(b)) return;
-					type(bRefs, Index);
-					if (refable(a[refs]) && !refable(b[refs])) [a,b] = [b,a];
-					if (refable(a[refs])) a = a[refs];
-					if (bRefs > a[refs]) throw "too many outside refs predicted";
-					type(a[refs], Index);
-					if (refable(b[refs])) {
-						if (a !== b[refs]) throw "splitting those not of the same cycle";
-						b[refs] = 0;
-					} else {
-						type(b[refs], Index);
-						if (bRefs > b[refs]) throw "too many outside refs predicted";
-					}
-					b[refs] += bRefs, a[refs] -= bRefs;
-					++a[refs];
-				}
-			},
-			destroy:{
-				doc:`if an object had references, ignores them and destroys/collects it.
-					(for garbage collection.)`,
-				call(obj) {
-					if (!refable(obj)) return;
-					if (refable(obj[refs])) obj = obj[refs];
-					if (obj[refs] || !(refs in obj)) obj[refs] = 1, unref(obj);
-				}
-			},
-			//Also, set.mark(…references), for adoption (or cycle splittage, right?).
-			//(and if we are doing deep search, gc too, from define if no other points were specified?)
-			call(obj, k, v) {
-				if (k === void 0) {
-					return obj !== v && (unref(obj), ref(v)), v;
-				} else {
-					if (!refable(obj))
-						throw `set at ${k} on ${obj===null ? 'null' : typeof obj}`;
-					if (owns(obj, k) && obj[refs] && obj[k] !== v)
-						return unref(obj[k], obj), ref(v, obj), obj[k] = v;
-					else return obj[k] = v;
-				}
-			},
-		},
-		shared:{
-			doc:`true if obj must be copy-on-write (is shared with others).
-				false if obj can be modified in-place (with no fear of affecting others).
-				with this, seemingly-copy-on-write operations can be implemented seamlessly and efficiently.`,
-			call(obj) {
-				"Now that the caller is responsible for cleaning up args, mere shared(o) is not enough — no guarantee that the caller does not use it after."
-					"We could make something that marks an object as last-use…"
-					"Or we could make the caller free before call — actually no, not all operations can re-use their inputs for outputs."
-				if (!refable(obj)) return true;
-				return !(refs in o) || (refable(o[refs]) ? o[refs][refs] : o[refs]) !== 1;
-			}
-		},
-		Array:{
-			txt:`an ordered set/collection of elements, with methods for manipulating sequences.`,
-			init(a, ...of) {
-				a.length = of.length;
-				for (let i=0; i < a.length; ++i) set(a, i, of[i]);
-			},
-			//copyWithin, fill, slice, splice, should all become ref-aware.
-			//start/end getters/setters shall also become ref-aware.
-			//and define reduce.
-			//and define filter, map, expand — should they be copy-if-shared (except for reduce)?
-		},
-		Object:{
-			txt:`an unordered key/value store, where keys are strings or symbols or indexes (seen as strings on iteration).
-				practically, on iteration, indexes will usually be first and ordered; then strings, then symbols, in order of insertion.`,
-			init(o, k, v) {
-				type(k, Array), type(v, Array);
-				if (k.length !== v.length) throw "object key/value lengths must match"
-				for (let i=0; i < k.length; ++i) set(o, k[i], v[i]);
-			},
-			//Should also re-define all object-property-manipulation methods.
-		},
-		//probably also re-define methods of Map/WeakMap/Set/WeakSet to be ref-aware.
-		//and Object.getset/.define.
-		//and WebAssembly.Table.prototype.get/.set.
-	},
-	seal: Object.seal,
-	refs: Symbol('refs'),
-	refable(o) { return (typeof o === 'object' || typeof o === 'function') && o },
-	cyclic(a,b) {
-		if (!refable(a) || !refable(b)) return false;
-		if (a === b) return true;
-		if (refable(a[refs]))
-			return refable(b[refs]) ? a[refs]===b || a===b[refs] || a[refs]===b[refs] : a[refs]===b;
-		else
-			return refable(b[refs]) ? a===b[refs] : false;
-	},
-	owns(o,k) {
-		if (typeof k !== 'string' || !(k in o)) return false;
-		if (o[prototype] !== Object.prototype || k === prototype || k === Object.string)
-			if (!Object.enum.call(o,k)) return false;
-		return type(o).shape && !type(o).shape.free || !Object.getter(o,k) && !Object.setter(o,k);
-	},
-	ref(v,o) {
-		if (v && v[refs] !== void 0) {
-			if (cyclic(v,o)) return;
-			if (refable(v[refs])) v = v[refs];
-			type(v[refs], Number), ++v[refs];
-		}
-	},
-	unref(v,o) {
-		if (v && v[refs]) {
-			if (cyclic(v,o)) return;
-			if (refable(v[refs])) v = v[refs];
-			type(v[refs], Number);
-			if (!--v[refs]) deinit(v);
-		}
-	},
-	cleanLater(t) {
-		cleanNow.t.with = t;
-		if (!cleanNow.will) delay(cleanNow), cleanNow.will = true;
-	},
-	cleanNow:{
-		t:new Set, will:false,
-		call() { self.will = false, self.t[Object.forEach] = cleanType }
-	},
-	cleanType(t) {
-		if (t.empty) {
-			const l = type(t.empty, Array).length;
-			if (t.empty.length > 1024) t.empty.length = 1024;
-			if (t.empty.length > 16) t.empty.length = 16;
-			else t.empty.length = 0, cleanNow.t.without = t;
-			init.count -= l - t.empty.length;
-			"Should do something about object resurrection (it is in caches, but its[refs] is not zero); not decrease count for those here and not return them from uncaching?"
-		} else cleanNow.t.without = t;
-	},
-	deinit(o) {
-		if (!(refs in o)) return;
-		const T = type(o);
-		o[refs] = 0;
-		type(T.deinit) === Function && T.deinit(o);
-		if (!T.empty) T.empty = [];
-		if (T.shape && type(T.shape, Array))
-			for (let i=0; i < T.shape.length; ++i)
-				o[T.shape[i]] = set(o[T.shape[i]], void 0);
-		else //Should likely be forEach, not simply such a branch.
-			for (let k in o)
-				if (owns(o, k))
-					o[k] = set(o[k], void 0), delete o[k];
-				"also, what about maps, or arrays, or WebAssembly.Table?"
-					"should be able to properly iterate over all those, too."
-					"forEach(o,f) should probably be used."
-		type(T.empty, Array).end = o;
-		"Should also keep track of init.active, so that tests could assert no ref-leaks."
-			"And maybe a way to actually store created objects, and possibly their creation/destruction stack-traces, so that tests could display ref-leaks?"
-		cleanLater(T);
-	},
 }
 code = {
 	name:"priorityHeap",
@@ -1868,21 +2178,21 @@ code = {
 
 				key:{
 					doc:`gets or sets the key of the (now-)min element.`,
-					call(k = void 0) {
-						if (k === void 0) return this.k[0];
+					call(k = _) {
+						if (k === _) return this.k[0];
 						return this.k[0] = type(k, Number), down(this, up(this, 0));
 					}
 				},
 				value:{
 					doc:`gets or sets the value of the min element.`,
-					call(v = void 0) { return v === void 0 ? this.v[0] : this.v[0] = v }
+					call(v = _) { return v === _ ? this.v[0] : this.v[0] = v }
 				},
 
 				length:{
 					doc:`gets or limits the length of the heap.
 						to limit its length, may remove some min elements.`,
-					call(l = void 0) {
-						if (l != void 0) while (l < this.k.length) this.pop();
+					call(l = _) {
+						if (l != _) while (l < this.k.length) this.pop();
 						return this.k.length;
 					}
 				},
@@ -1907,23 +2217,23 @@ code = {
 	name:"delay",
 	define:{
 		delay:{
-			txt:`delays the execution of a function asynchronously.
-				zero-delay callbacks are executed in order; others — when requested, as soon as possible.
-				no state can be passed to the callback (schedule own callback-executing function instead).
-				scheduled functions can not be cancelled.
+			doc:`Delays the execution of a function asynchronously.
+				Zero-delay callbacks are executed in order; others — when requested, as soon as possible.
+				No state can be passed to the callback (schedule own callback-executing function instead).
+				Scheduled functions can not be cancelled.
 				CPU usage is limited to delay.options.maxTimeUsage (0…1).
-				use delay over setImmediate or process.nextTick or setTimeout or requestAnimationFrame (unless the delay specifically for animating is wanted).
-				in browser background tabs, effects of timeout throttling are minimized — scheduling 100 callbacks to fire in a second will fire all in a second or two.
-				callbacks that timed out (throw void 0, usually automatically-inserted) will be called again — other exceptions will not be tolerated.`,
+				Use delay over setImmediate or process.nextTick or setTimeout or requestAnimationFrame (unless the delay specifically for animating is wanted).
+				In browser background tabs, effects of timeout throttling are minimized — scheduling 100 callbacks to fire in a second will fire all in a second or two.
+				Callbacks that timed out (throw _, usually automatically-inserted) will be called again — other exceptions will not be tolerated.`,
 			options:{ maxTimeUsage:.2 },
 			call(ms, func) {
 				if (type(ms) === Function) "the order does not matter", [ms, func] = [func, ms];
-				if (ms === void 0) ms = 0;
+				if (ms === _) ms = 0;
 				type(func, Function), type(ms, Number);
 				if (!(ms >= 0)) throw "delay ms expected to be a positive number, got " + ms;
-				if (!ms) imm.end = func, immLater();
+				if (!ms) imm.push(func), immLater();
 				else {
-					if (info.origin === void 0) info.origin = time();
+					if (info.origin === _) info.origin = time();
 					if (!info.next) info.next = init(Heap);
 					info.next.push(time(info.origin) + ms, func);
 					delayed();
@@ -1932,22 +2242,22 @@ code = {
 		}
 	},
 	imm:[],
-	info:{ origin:void 0, immWill:false, delayedWill:false,
+	info:{ origin:_, immWill:false, delayedWill:false,
 		next:null, isImm:false, used:0, total:0, immLast:0 },
 	immNow() {
 		info.immWill = false, info.isImm = true;
-		if (info.origin === void 0) info.origin = time();
-		var start = time(info.origin);
-		var max = delay.options.maxTimeUsage;
+		if (info.origin === _) info.origin = time();
+		const start = time(info.origin);
+		const max = delay.options.maxTimeUsage;
 		info.total += start - info.immLast, info.immLast = start;
 		if (info.used >= info.total * max) return immLater();
-		var dur = Math.min((info.total * max - info.used) / (1 - max), 10);
+		let dur = Math.min((info.total * max - info.used) / (1 - max), 10);
 		try {
-			for (var i=0; i < imm.length && time(info.origin) <= start + dur; ++i) {
+			for (const i=0; i < imm.length && time(info.origin) <= start + dur; ++i) {
 				if (i >= 128 && imm.length-i <= 8) i-=128, imm.splice(0,128);
 				imm[i].call();
 			}
-		} catch (err) { if (err !== void 0) throw imm.splice(0,1), err } finally {
+		} catch (err) { if (err !== _) throw imm.splice(0,1), err } finally {
 			imm.splice(0,i), immLater(), info.isImm = false;
 			dur = time(info.origin) - start;
 			info.used += dur, info.total += dur, info.immLast += dur;
@@ -1958,9 +2268,9 @@ code = {
 		if (!info.immWill && imm.length) {
 			if (delay.options.maxTimeUsage < .1)
 				setTimeout(immNow, 100);
-			else if (typeof process !== ''+void 0) {
+			else if (typeof process !== ''+_) {
 				(info.isImm ? setTimeout : process.nextTick)(immNow, 10);
-			} else if (typeof requestAnimationFrame !== ''+void 0)
+			} else if (typeof requestAnimationFrame !== ''+_)
 				requestAnimationFrame(immNow);
 			else setTimeout(immNow, 10);
 			info.immWill = true;
@@ -1968,10 +2278,10 @@ code = {
 	},
 	delayed() {
 		try {
-			if (info.origin === void 0) info.origin = time();
+			if (info.origin === _) info.origin = time();
 			while (info.next.key() <= time(info.origin))
 				info.next.value()(), info.next.pop();
-		} catch (err) { if (err !== void 0) throw info.next.pop(), err } finally {
+		} catch (err) { if (err !== _) throw info.next.pop(), err } finally {
 			if (info.next.length() && !info.delayedWill) {
 				setTimeout(delayedTimer, info.next.key() - time(info.origin));
 				info.delayedWill = true;
@@ -1981,7 +2291,7 @@ code = {
 	delayedTimer() { info.delayedWill = false, delayed() },
 }
 code = {
-	name:'type',
+	name:'type — used for type-checking and getting the type',
 	define:{
 		syntax:[
 			v => { typeof v==='boolean', type(v)===Boolean, type.is(v, Boolean) },
@@ -1989,17 +2299,17 @@ code = {
 			v => { typeof v==='string', type(v)===String, type.is(v, String) },
 			v => { typeof v==='function', type(v)===Function, type.is(v, Function) },
 			v => { typeof v==='symbol', type(v)===Symbol, type.is(v, Symbol) },
-			v => { typeof v===''+void 0, type(v)===void 0, type.is(v), v===void 0 },
-			v => { v && typeof v==='object', type.is(v, Object) },
+			v => { typeof v===''+_, type(v)===_, type.is(v), v===_ },
 			v => { !v && typeof v==='object', type.is(v, null), type(v)===null, v===null },
 		],
 		Int:{ is(v) { return type.is(v, Number) && v>>0 === v } },
 		Index:{ is(v) { return type.is(v, Number) && v>>>0 === v } },
 		Codepoint:{ is(v) { return type.is(v, Index) && (v < 0xd800 || v>=0xe000 && v<0x110000) } },
-		Object:{ is(v) { return v && typeof v==='object' } },
 		type:{
 			doc:`Returns the type of value, or asserts that it is one of the supplied types and returns it.
-				"Should also have type.super(…v), the type which all can be converted to or void… but how can we do this without actual value conversion?"`,
+				(Only up to 3 types can be supplied, to avoid having to create a garbage array for the rest of args.)
+				"Should also have type.super(…v), the type which all can be converted to or void… but how can we do this without actual value conversion? Too inefficient to have otherwise."
+					'…So maybe should not.'`,
 			is:{
 				doc:`Checks if a value belongs to a type.`,
 				call(v, type) {
@@ -2010,22 +2320,22 @@ code = {
 				}
 			},
 			call(v, t0, t1, t2, t3) {
-				(tN:"An optimization, because …types allocates memory, and this is called a lot.")
-				if (t0 === void 0) return T(v);
-				if (t3 !== void 0) throw "Too many expected types passed to type(…)";
-				if (t0 !== void 0) {
+				{tN:"An optimization, because …types allocates memory, and this is called a lot."}
+				if (t0 === _) return T(v);
+				if (t3 !== _) error("Too many expected types passed to type(…)");
+				if (t0 !== _) {
 					if (type.is(v, t0)) return v;
-					if (t1 !== void 0) {
+					if (t1 !== _) {
 						if (type.is(v, t1)) return v;
-						if (t2 !== void 0) {
+						if (t2 !== _) {
 							if (type.is(v, t2)) return v;
-							throw `Unexpected type: ${descr(T(v))} (expected ${descr(t0)} or ${descr(t1)} or ${descr(t2)})`;
+							error(`Unexpected type: ${descr(T(v))} (expected ${descr(t0)} or ${descr(t1)} or ${descr(t2)})`);
 						}
-						throw `Unexpected type: ${descr(T(v))} (expected ${descr(t0)} or ${descr(t1)})`;
+						error(`Unexpected type: ${descr(T(v))} (expected ${descr(t0)} or ${descr(t1)})`);
 					}
-					throw `Unexpected type: ${descr(T(v))} (expected ${descr(t0)})`;
+					error(`Unexpected type: ${descr(T(v))} (expected ${descr(t0)})`);
 				}
-				throw 'Should not happen';
+				error('Should not happen');
 			}
 		},
 		to:{
@@ -2050,10 +2360,10 @@ code = {
 		},
 	},
 	T(v) {
-		if (v === void 0 || v === null) return v;
+		if (v === _ || v === null) return v;
 		if (typeof v === 'function') return Function;
 		v = v[prototype];
-		return v === Object.prototype || !v ? Object : v.constructor || null;
+		return v === Object.prototype || !v ? Object : v.constructor || v;
 	},
 	isOf(v, types) {
 		const t = T(v);
@@ -2065,7 +2375,7 @@ code = {
 	descr(t) {
 		try {
 			return t && t.name ? t.name : String(t);
-		} catch (err) { set(err); return '<type>' }
+		} catch (err) { return '<type>' }
 	}
 }
 code = {
@@ -2077,7 +2387,7 @@ code = {
 				(Browser timing randomization will likely wreak havoc on time and time.guess.)`,
 			call(mark = 0) {
 				type(mark, Number);
-				if (typeof performance!==''+void 0)
+				if (typeof performance!==''+_)
 					return Math.max(0, performance.now() - (mark && mark + self.time));
 				if (!mark) return process.hrtime.bigint();
 				return Math.max(0, Number(process.hrtime.bigint() - mark)/1e6 - self.time);
@@ -2086,6 +2396,7 @@ code = {
 				doc:`Measures elapsed time: time()→mark, time(mark)→ms; ms>=0.
 					Less precise than time(…), but faster (if slower, it is replaced with time(…)).`,
 				call(mark = 0) {
+					if (info.last === null) return time(mark);
 					const n = Date.now();
 					if (info.last > n) info.delta += info.last - n;
 					return (info.last = n) + info.delta - mark;
@@ -2094,9 +2405,9 @@ code = {
 			limit:{
 				doc:`Allows imposing and checking an approximate time-limit on execution.
 					.limit() throws void if time-limit is exceeded; .limit(ms) will set the time-limit if it will be more restrictive than before; .limit(∞) will reset the time-limit (making .limit() not throw). Time-limit will also be reset after a 0-ms timeout after setting.`,
-				call(ms = void 0) {
-					if (ms === void 0) {
-						if (info.limit && time.guess() > info.limit) throw void 0;
+				call(ms = _) {
+					if (ms === _) {
+						if (info.limit && time.guess() > info.limit) throw _;
 						return;
 					}
 					type(ms, Number);
@@ -2114,11 +2425,16 @@ code = {
 				In Node.js (10.15), every call to this allocates memory (about 1-2 KB) — use memory.guess to not; memory(memory()) might not return 0, but will try to anyway (by pre-calibrating).`,
 
 			guess:{
-				doc:`Guesses the current memory usage from the number of currently-active ref-tracked objects (the precise method of guessing is completely unbased).
+				doc:`Guesses the current memory usage from the number of active-or-cached ref-tracked objects (the precise method of guessing is completely unbased).
 					Though very useful for optimizing memory usage in certain conditions, browsers do not expose any such interface.`,
-				call(mark = 0) { return type(mark, Number), init.count*256 - mark }
+				avgRefMem: 256,
+				call(mark = 0) {
+					type(mark, Number);
+					return info.base + Math.round(ref.total * self.avgRefMem) - mark;
+				}
 			},
 			call(mark = 0) {
+				if (typeof process===''+_) return memory.guess(mark);
 				type(mark, Number);
 				const m = process.memoryUsage();
 				return m.rss + m.heapUsed - m.heapTotal - (mark + self.memory);
@@ -2131,7 +2447,7 @@ code = {
 			() => memory.guess(memory.guess()) % 1 === 0,
 		],
 	},
-	info:{ last:0, delta:0, limit:0, lock:false },
+	info:{ last:0, delta:0, limit:0, lock:false, base:0 },
 	resetTimeLimit() { info.limit = 0, info.lock = false },
 	call() {
 		time.time = 0;
@@ -2140,16 +2456,20 @@ code = {
 		const durPrecise = time(start);
 		for (let i=0; i < 100; ++i) time.guess(start);
 		const durApprox = time(start) - durPrecise;
-		if (durApprox > durPrecise*2) time.guess[code] = time[code];
+		if (durApprox > durPrecise*2) info.last = null;
 
-		let f; {"Calibrate time/memory to account for devilry."}
+		let f;
 		f = time, f(), f(), f(), f.time = (f(f()) + f(f()) + f(f())) / 3;
 		if (f.time > 1) f.time = 0;
-		if (typeof process===''+void 0)
-			memory[code] = memory.guess[code];
-		else {
+		if (typeof process!==''+_) {
 			(f = memory).memory = 0, f(), f(), f(), f.memory = f(f());
 			if (f.memory > 3000) f.memory = 0;
+			setTimeout(() => {
+				info.base = memory();
+				setInterval(() => { "Calibrate guessed memory to account for devilry."
+					if (ref.active) memory.guess.avgRefMem = memory() / ref.active;
+				}, 1000).unref();
+			}, 1000).unref();
 		}
 	},
 }
@@ -2164,7 +2484,7 @@ code = {
 		notify(msg, title = document.title || 'Alert') {
 			msg = String(msg);
 			const iconUrl = get().href;
-			if (typeof browser!==''+void 0)
+			if (typeof browser!==''+_)
 				browser.notifications.create({ type:'basic', iconUrl, message:msg, title });
 			else {
 				if (N.permission !== 'granted' && N.permission !== 'denied') N.requestPermission();
@@ -2173,13 +2493,13 @@ code = {
 		},
 	},
 	call() {
-		if (typeof browser!==''+void 0)
+		if (typeof browser!==''+_)
 			browser.notifications.getAll().then(o => Object.keys(o)[Object.forEach] = browserClear),
 			("notifications would sometimes bug out and never close — just kill all.");
-		if (typeof document===''+void 0 || typeof fetch===''+void 0) return;
+		if (typeof document===''+_ || typeof fetch===''+_) return;
 		setInterval(checkSources, 5000);
 	},
-	N: typeof Notification!==''+void 0 && Notification,
+	N: typeof Notification!==''+_ && Notification,
 	context(x) {
 		var ctx = document.createElement('canvas').getContext('2d');
 		ctx.canvas.width = x.width, ctx.canvas.height = x.height;
@@ -2187,12 +2507,12 @@ code = {
 	},
 	browserClear(id) { browser.notifications.clear(id) },
 	get() {
-		const e = document.querySelector('link[rel=icon]') || document.createElement('link');
-		"wait — do we ever actually append it to document.head?"
-		return e.rel = 'icon', e;
+		let e = document.querySelector('link[rel=icon]');
+		if (!e) e = document.createElement('link'), e.rel = 'icon', document.head.appendChild(e);
+		return e;
 	},
 	set(x) {
-		get().href = x; typeof browser!==''+void 0 && browser.browserAction.setIcon({ path:x });
+		get().href = x; typeof browser!==''+_ && browser.browserAction.setIcon({ path:x });
 	},
 	faviconBlob(blob) { URL.revokeObjectURL(get().href), set(URL.createObjectURL(blob)) },
 	close() { this.close(), "instantly" },
@@ -2201,9 +2521,9 @@ code = {
 	checkSources() {
 		let url;
 		if (!(document.URL in sources)) {
-			sources[document.URL] = void 0;
+			sources[document.URL] = _;
 			for (let i=0; i < document.scripts.length; ++i)
-				(url = document.scripts[i].src) && (sources[url] = void 0);
+				(url = document.scripts[i].src) && (sources[url] = _);
 		}
 		for (url in sources)
 			if (sources[url] !== null) {
@@ -2216,47 +2536,118 @@ code = {
 }
 code = {
 	name:"randomNumbers",
-	buf:{ a:new Uint32Array(1024), pos:1024 },
 	define:{
+		tests:[() => random()<1, () => random(10)<10, () => random() >= 0],
 		random:{
-			txt:`Returns something uniformly-distributed and randomly-chosen.
-				With no args, returns a number from 0 to 1 (1 is exclusive).
-				With an integer n, returns an integer in 0…n-1.
-				With an array, returns any element.`,
-			max: Math.pow(2,32),
-			call(end = void 0) {
-				if (type(end) === Array) return end[self(end.length)];
-				const l = random.max;
-				if (end === void 0) return (self(l) + self(l)/l) / l;
-				if (end<=0 || end%1) throw 'Expected a positive int — exclusive limit of the generated random number; got '+end;
-				if (end > l) throw 'Provided upper limit is too big: '+end;
-				do {
-					if (buf.pos >= buf.a.length) buf.a.pos = 0, self.fill(buf.a);
-					var x = buf.a[buf.pos++];
-				} while ((end & (end-1)) ? (x >= l - l % end) : false);
-				return (end & (end-1)) ? (x & (end-1)) : x % end;
+			why:`An interface to crypto.getRandomValues for generating random numbers on-demand as opposed to in-batches, optimized to request the least amount of random bits required, is desirable.
+				(To allow objects to define their own notion of uniform random element, extensible, as all things should be.)`,
+
+			doc:`Returns something uniformly-distributed and randomly-chosen.
+				With an unsigned 32-bit integer n, returns an integer in 0…n-1 (where 0 returns any uint32).
+				With no args, returns a number in 0…1 (1 is exclusive).
+				With an object/function with .random() (like an array), returns obj.random().`,
+
+			call(end = _) {
+				if (end === _) return random.float();
+				if (end !== (end>>>0)) {
+					if (type.is(end.random, Function)) return end.random();
+					error('Expected uint32/void/extensible as limit of random');
+				}
+				if (end === 0) return random.bits(); if (end === 1) return 0;
+				if (!(end & (end-1))) return random.bits(count(end));
+
+				let n=0, q0=0, q1=0;
+				if (buf.end === end) n = buf.n, q0 = (1 << n) % end;
+				else {
+					n = count(end) + 1, q0 = (1 << n) % end, q1 = 2*q0, q1>=end && (q1-=end);
+					"Expected bit-cost of N: N / (1 - (2**N)%end/(2**N)). Seek while next is less."
+					while (true) {
+						if (n >= 32) { n = 32; break }
+						if (n <= 15) {
+							if ((1<<(2*n+1)) <= ( q1*(n<<n) - q0*((n+1)<<(n+1)) )) break;
+						} else if (n <= 20) {
+							if ((1<<(2*n-9)) <= ( q1*(n<<(n-9)) - q0*((n+1)<<(n-8)) )) break;
+						} else if (n <= 25) {
+							if ((1<<(2*n-19)) <= ( q1*(n<<(n-19)) - q0*((n+1)<<(n-18)) )) break;
+						} else {
+							if (n*(1-(2*2**n)%end/(2*2**n)) <= (n+1)*(1-(2**n)%end/(2**n))) break;
+						}
+						++n, q0 = q1, q1 *= 2, q1>=end && (q1-=end);
+					}
+					buf.end = end, buf.n = n;
+				}
+				q1 = (n < 32 ? 1 << n : 2 ** n) - q0;
+				do { q0 = random.bits() } while (q0 >= q1);
+				return q0 % end;
 			},
-			bit() {
-				if (!self.n) self.x = random(), self.n = 32;
-				const r = self.x & 1;
-				self.x >>= 1, --self.n;
+			float:{
+				doc:`Returns a uniformly-distributed number from 0 to 1 (0 is inclusive).
+					Equivalent to 'random()'.`,
+				call() {
+					let a = bits(21), b = bits(), e = 0;
+					while ((a === ((a << 12) >>> 12)) && e < 1021)
+						a = (a << 1) | (b >>> 31), b = (b << 1) | bits(1), ++e;
+					return (a * Math.pow(2,32) + b) * Math.pow(2, -53-e);
+				}
+			},
+			roll:{
+				doc:`Returns true with probability p, else false.
+					Equivalent to 'random() < p' with checks on p, but faster.`,
+				call(p) {
+					type(p, Number);
+					if (p < 0) error('Probability is too low: '+p);
+					if (p > 1) error('Probability is too high: '+p);
+					if (p !== p) error('Probability is NaN');
+					if (p === 1) return true;
+					while (true) {
+						const n = Math.floor(p *= 16);
+						if (p === n) {
+							if (!n) return false;
+							if (n === n >> 3 << 3) return !random.bits(1);
+							if (n === n >> 2 << 2) return random.bits(2) < (n >> 2);
+							if (n === n >> 1 << 1) return random.bits(3) < (n >> 1);
+						}
+						const r = random.bits(4);
+						if (r !== n || p === n) return r < n; else p -= n;
+					}
+					error();
+				},
+				impl:`Generating (up to) 4 bits at a time is not based on past performance measures, or anything.
+					Using 4 bits at a time consumes on average about double the bits that using 1 bit at a time would, but should be much faster.`,
+			},
+
+
+
+			bits(n) {
+				if (!n) {
+					if (buf.pos >= buf.a.length) buf.a.pos = 0, random.fill(buf.a);
+					return buf.a[buf.pos++];
+				}
+				if (n !== (n & 31)) error('Expected 0…31 bits to generate (where 0 is 32)');
+				if (self.n === _) self.r = self.n = 0;
+				let r = 0;
+				if (n > self.n) r = self.r, n -= self.n, self.r = self(), self.n = 32;
+				r = (r << n) | (self.r & ((1 << n) - 1)), self.n -= n, self.r >>>= n;
 				return r;
 			},
-			fill(a, bytes = void 0) {
+			fill(a, bytes = _) {
 				a = new Uint32Array(a.buffer || a);
-				if (bytes === void 0) bytes = a.byteLength;
-				if (typeof crypto!==''+void 0 && crypto.getRandomValues) {
+				if (bytes === _) bytes = a.byteLength;
+				if (typeof crypto!==''+_ && crypto.getRandomValues) {
 					const quota = 65536, n = Math.floor(bytes/quota);
 					let src = n && new Uint32Array(quota), i;
 					for (i = 0; i < n; ++i) crypto.getRandomValues(src), a.set(src, i*quota);
 					src = new Uint32Array(bytes - n*quota);
 					crypto.getRandomValues(src), a.set(src, n*quota);
-				} else for (let i = 0; i < a.length; ++i)
-					a[i] = Math.floor(Math.random() * random.max);
+				} else for (const i = 0; i < a.length; ++i)
+					a[i] = (Math.random() * Math.pow(2,32)) >>> 0;
 				return a;
 			},
-		}
-	}
+		},
+		Array:{ prototype:{ random() { return this[random(this.length)] } } }
+	},
+	buf:{ a:new Uint32Array(1024), pos:1024, end:0, n:0 },
+	count(n) { let x=0; while (n >>>= 1) ++x; return x },
 }
 code = {
 	name:"prettify",
@@ -2276,7 +2667,7 @@ code = {
 				s = s.replace(/[^\.\?\!…]$/, s => s[0] + '.');
 				return s;
 			},
-			back:{
+			undo:{
 				doc:`converts (English) sentences to in-code names, of the format [a-z][a-zA-Z0-9]*.`,
 				call(s) {
 					s = s.replace(/\ba\b/g, '');
@@ -2286,6 +2677,315 @@ code = {
 					return s;
 				}
 			},
+		},
+	},
+}
+
+
+
+
+
+
+
+code = {
+	name:'refs',
+	define:{
+		ref:{
+			doc:`Non-intrusive ref-counting by giving/taking responsibility. Required if managing a resource (then each take must have exactly one give); otherwise its existence can be forgotten unless otherwise specified by called functions (its inclusion may allow greater efficiency, not greater correctness, unless a child actually reads the ref-count).
+				Allows re-use of no-longer-used objects (and thus of CPU cache).`,
+
+			why:`
+				Automatic garbage collection is the most general solution to memory management, but to re-use objects and CPU cache reliably (especially desired in a tight loop), another way of tracking their lifetime is required.
+				Pairing creation with destruction (RAII), necessitating smart-pointer classes, in a dynamic language would mean that instances of those smart-pointers must be created for any lifetime management — double-indirection is not only inefficient, but also a source of easy-to-fix bugs and some code repetition for dereferencing.
+				Ref-counting must not impose any constraints on code that does not care about ownership (and thus not be a far-reaching source of bugs, and require every single function to be re/written with ref-counting in mind), and it must integrate seamlessly with non-ref-counted objects (and thus not require every single pre-existing global object to be augmented). Giving/taking responsibility with delayed destruction achieves these.`,
+
+			call(o) { return ref.take(o) },
+			active:0,
+			give:{
+				doc:`Gives responsibility for a reference (object/function) to someone else, decrementing its ref-counter. If it is still zero on ref.finally or async as-soon-as-possible (if no one takes responsibility), ref.deinit is called on it; take-after-give is then a no-op. Deferred-deinit unref.
+					Returns the passed object (unless unwanted). If it is not ref-tracked, no responsibility is ever claimed, and give/take/drop are no-op.
+					Use when returning an owned variable or passing its last use as a parameter; on exception, drop it in try/catch.
+					Ensure least possible delay between give/take — try to only use give/take at function call boundaries, and maybe call ref.finally if correct to clean up now.`,
+				call(o) {
+					if (!refable(o) || o[refs] === _) return o;
+					return dec(o, false), o;
+				}
+			},
+			take:{
+				doc:`Takes responsibility for a reference (object/function) from someone else, incrementing its ref-counter (and making it not be cleaned up). Maybe-given ref.
+					Returns the passed object. If it is not ref-tracked, no responsibility is ever taken, and give/take are no-op.
+					Use when accepting args, or when storing a variable in some way.
+				`,
+				call(o) {
+					if (!refable(o) || o[refs] === _) return o;
+					return inc(o), o;
+				}
+			},
+			drop:{
+				doc:`Drops or gives up responsibility for a reference; none will take it.
+					Use when a variable goes out of scope, inside finally of try/finally.`,
+				call(o) { if (!refable(o) || o[refs] === _) return o; dec(o, true) }
+			},
+			finally:{
+				doc:`All owner-less responsibility is unwanted, and will be claimed by the void.
+					Only do this if all callers are known to be fully ref-counting (for example, the outer event loop can call this), else use-after-free will ensue.`,
+				call() { abyss.forEach(ref.deinit) }
+			},
+
+			shared:{
+				doc:`Returns false if the passed object/function has only one reference to it, else true (if not ref-tracked, true).
+					Make sure that callers, direct or not, are ref-tracking.
+					If the object has zero refs to it, throws, to help with use-after-free bugs.
+					Check used after taking (given to void with try/finally if needed) to see if (potentially more efficient) in-place modification is allowed. (This generally means that reads can be non-ref-tracking, but writes should be ref-tracking.)`,
+				call(o) {
+					if (!refable(o)) return true;
+					if (o[refs] === 0) throw "Use after free detected";
+					return o[refs] !== 1;
+				}
+			},
+			count:{
+				doc:`Returns ref-count of o. For use in optimizations only.
+					Will not be correct unless all callers are ref-tracking.`,
+				call(o) {
+					return !refable(o) ? _ : !refable(o[refs]) ? o[refs] : o[refs][refs];
+				}
+			},
+			counted:{
+				doc:`Returns whether an object is ref-counted. Assert this before attaching any responsibility to its lifetime.`,
+				call(o) { return o && o[refs] !== _ }
+			},
+
+			joined:{
+				doc:`Returns true if a and b use the same ref-counter, and false otherwise.
+					If true, ref.take(a),ref.give(b, true) is a no-op (for any order of a/b), as is ref.take(a),ref.give(b) (for any order of a/b and take/give).`,
+				call(a,b) {
+					if (!refable(a) || !refable(b)) return false;
+					return a[refs] !== _ && a === b || a[refs] === b || a === b[refs];
+				}
+			},
+			join:{
+				doc:`Joins ref-counters of an object and its value, allowing cycles to be collected.
+					Most suitable for unchanging structures.
+					Do not join if it is known that no circular references exist.
+					For each o.get(k) in a cycle (on a trace through composition that has led from a value to that same value), ref.join(o,k) must be called (for example, for a two-node trivial cycle/loop/circuit, it must be called twice.); before any future composition modifications, ref.split(o,k) should be called (though not required for correctness).`,
+
+				why:`
+					Using strong (ref-counting) references everywhere in code presents a causality problem with reference cycles (their ref-count cannot ever reach 0). It is usually solved by using weak references — that is, non-ref-counting, and carefully engineering resource lifetimes to still be correct (for example, in tree structures, parent and siblings references should be weak references). This intertwines data and code, and runs into use-after-free during development too often, and makes robust program rewrites much more complicated and/or brittle. Weak references are not a solution to the cycle problem, only a workaround, better used elsewhere (not ref-counting is faster than ref-counting, so since JS is single-threaded run-until-completion, ref-counting can be limited to function boundaries).
+					Garbage collection (of cycles) is always possible, but there is an overhead, and the freeing is delayed arbitrarily — which does not help with re-using the same objects to not bloat during tight loops and such.
+					Joining ref-counts is an actual solution to ref-cycles — a ref-counter (obj[refs], usually a number) can point to another object with a ref-counter, and both are treated as one by give/take (which fits well if object references are fitted in the NaN part of 8-byte float numbers, as is usually the case in JS engines) (semantically, the tree example would have one ref-count for the whole tree, and not always-1 pseudo-counts on non-root nodes). It can never free potentially-used objects, so is not brittle in that regard, and fully encapsulates ref knowledge within a value (not sprinkled through code). (The only brittle part is splitting ref-counts before writing, which requires program-level knowledge of how many refs there are to each object (likely zero) — but that is exactly what working with weak refs requires, and is only limited to dynamic cycle breaking.)`,
+				call(o,k) {
+					type(o.get, Function);
+					const v = ref.take(o.get(k));
+					try {
+						if (!refable(o) || !refable(v)) return;
+						if (o === v) return;
+						if (refable(o[refs])) o = o[refs];
+						if (refable(v[refs])) v = v[refs];
+						type(o[refs], Index), type(v[refs], Index);
+						if (!o[refs] || !v[refs])
+							error("Joined cycles must not be already collected");
+						if (o !== v) o[refs] += v[refs], v[refs] = o;
+						return ref.give(v);
+					} finally { ref.give(v, true) }
+				}
+			},
+			split:{
+				doc:`After ref.join(o,k), call ref.split(o,k) to split reference counts before modifications to structure.
+					If the value has any non-cycle refs, their count must be precisely passed as bRefs — else one of them will never be collected, and another will report having to give responsibility it does not have (near destruction).`,
+				call(o,k, vRefs = 0) {
+					type(o.get, Function);
+					const v = ref.take(o.get(k));
+					try {
+						if (!refable(o) || !refable(v)) return;
+						type(vRefs, Index);
+						if (refable(o[refs]) && !refable(v[refs])) [o,v] = [v,o];
+						if (refable(o[refs])) o = o[refs];
+						if (vRefs > o[refs]) error("Too many outside refs predicted");
+						type(o[refs], Index);
+						if (refable(v[refs])) {
+							if (o !== v[refs]) error("Splitting different ref-counters");
+							v[refs] = 0;
+						} else {
+							type(v[refs], Index);
+							if (vRefs > v[refs]) error("Too many outside refs predicted");
+						}
+						v[refs] += vRefs, o[refs] -= vRefs;
+						return ref.take(v);
+					} finally { ref.give(v, true) }
+				}
+			},
+
+
+			active:0, total:0,
+			init:{
+				doc:`Initialize and return an object of type t, taking from a (type-specific) cache or creating if empty. Take responsibility for it to make it last past the immediate synchronous execution.
+					If t is a function, it is created with 'new T'; if an object, with 'Object.create(t)' (do not create .prototype for types, define both static and instance methods on the type); else throw. On the created object, 'o.init()' is called if present; if it returns non-_ non-o, that is returned instead.
+					If second arg is true, does not create a ref-counter on the object (nor gives responsibility).`,
+				call(T, noRef = false) {
+					if (T === String) return '';
+					if (T === Number) return 0;
+					if (T === Boolean) return false;
+					if (T === Symbol) return T();
+					if (memory.guess() > ref.maxMem) ref.free(memory() - ref.maxMem);
+					let o;
+					if (T.cache)
+						do { o = T.cache.pop(), --ref.total } while (o && o[refs] !== 0);
+					if (o === _) o = type(T) !== Function ? Object.create(T) : new T;
+					if (type.is(o.init, Function) && o.init.prototype) {
+						const r = o.init();
+						if (r !== _ && r !== o)
+							o[refs] = 1, ref.drop(o), o = r, --ref.total, --ref.active;
+					}
+					++ref.total, ++ref.active;
+					return !noRef ? (o[refs] = 1) : (delete o[refs]), ref.give(o);
+				}
+			},
+			deinit:{
+				doc:`Deinitialize an object (or function), giving all responsibility for it to a (type-specific) cache.
+					'o.deinit()' is called if present. Then, each value composing o is dropped (using forEach).
+					Even a non-ref-tracked object will be treated as ref-tracked.`,
+				call(o) {
+					if (!refable(o) || o[refs] === _) return;
+					o[refs] = 0, --self.active;
+					type.is(o.deinit, Function) && o.deinit();
+					forEach.value(o, ref.drop);
+					const T = type(o);
+					if (Object.owns.call(o, 'cache')) ref.drop(o.cache);
+					if (T.cache === _) T.cache = init(StackCache);
+					if (T.cache) T.cache.push(o);
+				}
+			},
+
+			maxMem: 100e6,
+			free:{
+				doc:`Low-level; frees mem (likely bytes) by freeing caches. Called internally when ref.maxMem is reached on an allocation.`,
+				list:[d => { free.d = d, stackCaches.forEach(free) }],
+				call(mem, ms = 5) {
+					type(ms, _, Number);
+					const start = time.guess();
+					while (mem > 0 && (ms === _ || time.guess(start) < ms))
+						mem -= random(self.list)(mem);
+				}
+			},
+			onFree:{
+				doc:`Low-level; adds a requestedFreeMem → actualFreedMem function to the list of functions called on free.`,
+				call(f) { ref.free.list.push(ref.take(f)) }
+			},
+			destroy:{
+				doc:`Low-level; make sure to call this when an object will no longer be reachable even by caches.`,
+				call(o) {
+					--ref.total, 'remove back-refs of o.'
+				}
+			},
+		},
+		init:'ref.init',
+		deinit:'ref.deinit',
+		cache:'ref.init/.deinit',
+
+
+		tests:[
+			() => { 'refs'
+				if (!ref.shared({})) error('no-ref must be shared');
+				const a = { [refs]:1 };
+				if (ref.shared(a)) error('one-ref must not be shared');
+				try { return abyss.has(ref.give(a)) }
+				finally { ref.finally() }
+			},
+			() => { 'cycles'
+				const a = { [refs]:1 }, b = { [refs]:1 };
+				a.get = () => b, b.get = () => a, "— not a good way to define those in general.";
+				if (!ref.joined(a,a) || !ref.joined(b,b)) error('not self-joined');
+
+				const cycle = ref.take(ref.join(ref.join(a, ''), ''));
+				try {
+					if (cycle !== a) error('not a cycle');
+					if (!ref.joined(a,b)) error('cycle not joined');
+					if (cycle[refs] !== 1) error(cycle[refs] + ' refs of cycle');
+					if (abyss.has(a) || abyss.has(b)) error('deleting after joining');
+				} catch (err) { ref.give(cycle, true); throw err }
+
+				ref.give(ref.split(ref.split(cycle, ''), ''));
+				if (ref.joined(a,b)) error('failed to split');
+				if (!abyss.has(a) || !abyss.has(b)) error('not deleting after splitting');
+			},
+			() => { 'inits'
+				const o = ref.take(ref.init({ x:12 }));
+				if (ref.shared(o)) error('wrong ref-count of a just-initialized object');
+				if (o.x !== 12) error('type is not a prototype');
+				ref.deinit(o);
+				if (o[refs] !== 0) error('not freed');
+			},
+		],
+	},
+	refs:Symbol('refs'),
+	abyss:new Set,
+	clearAbyss() { self.lock = false; ref.finally() },
+	refable(o) { return (typeof o === 'object' || typeof o === 'function') && o },
+	inc(o) {
+		if (refable(o[refs])) o = o[refs];
+		type(o[refs], Number), ++o[refs];
+		if (o[refs] === 1) ++ref.active, abyss.delete(o);
+	},
+	dec(o, unwanted = false) {
+		if (refable(o[refs])) o = o[refs];
+		if (o[refs] === 0) error("Gave too much responsibility, without having it");
+		type(o[refs], Number), --o[refs];
+		if (o[refs] === 0) {
+			--ref.active;
+			if (unwanted) ref.deinit(o);
+			else if (abyss.add(o), !clearAbyss.lock)
+				clearAbyss.lock = true, delay(clearAbyss);
+		}
+	},
+
+	epoch:{
+		n:0, lock:false,
+		end() { epoch.lock = false, epoch.n = (epoch.n+1) >>> 0 },
+		call() { if (!self.lock) delay(self.end), self.lock = true; return self.n }
+	},
+	free(c) { c.free(self.d) },
+	stackCaches:new Set,
+	StackCache:{
+		[prototype]: Array.prototype,
+		doc:`Basic cache for freed objects. Does not cache at first. When it would have been useful 3 times in one synchronous run, turns into an actual last-in-first-out cache, and turns back when it becomes empty.`,
+		why:`
+			When an object is no longer required, CPU caches can be re-used if the object is re-used.
+			However, JS garbage collection is optimized towards freeing most-recently-allocated objects, so unless we can (more or less) prove that caching would actually be beneficial, we must not cache.`,
+
+		init() { this.length = 3, this[0] = epoch(), this[1] = this[2] = 0 },
+		deinit() { this.length = 0, stackCaches.delete(this) },
+		monitoring() {
+			return type.is(this[0], Number) && (this[0] !== epoch() && this.init(), true);
+		},
+		push(o) {
+			if (this.monitoring()) this[1] = (this[1] + 1) >>> 0;
+			else this[this.length++] = o;
+		},
+		pop() {
+			if (this.monitoring()) {
+				this[2] = Math.min(this[1], this[2] + 1) >>> 0;
+				if (this[2] >= 3) this.length = 0, stackCaches.add(this);
+			} else {
+				if (this.length)
+					try { return this[this.length-1] } finally { --this.length }
+				else this.init(), stackCaches.delete(this);
+			}
+		},
+		get(k) { return k === _ ? 0 : _ },
+
+		free(d) {
+			if (type.is(this[0], Number)) error('Freeing a cache while in monitoring mode');
+			if (!this.length) error('Freeing an empty cache');
+			const start = memory.guess();
+			ref.total -= this.length;
+			const max = -memory.guess(start);
+			if (max > d) {
+				ref.total += this.length;
+				const n = Math.ceil(this.length * d / max);
+				for (const i = this.length - n; i < this.length; ++i) ref.destroy(this[i]);
+				this.length -= n;
+				if (!this.length) stackCaches.delete(this);
+			} else this.forEach(ref.destroy), this.length = 0, stackCaches.delete(this);
 		},
 	},
 }
@@ -2312,3 +3012,40 @@ code = {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+code
