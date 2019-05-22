@@ -77,14 +77,14 @@
 			s += keys.length ? `const[${keys}]=[ⴵ.${keys.join(',ⴵ.')}];` : '';
 			s += `ⴵ=_;return(${f})`;
 			if (env && env.name && typeof env.name === 'string')
-				s += '\n//# sourceURL=' + env.name;
+				s += '\n//# sourceURL=' + env.name + '\n';
 			return self(Function('ⴵ', s)(env), env);
 		}
 		if (typeof f !== 'function') throw "Expected a function or a string";
 		if (env === _) return f[fenv] || null;
 		if (!env || typeof env !== 'object') throw "Function env must be an object";
 		if (f[fenv]) throw "Trying to change function env after creation";
-		delete f.prototype, delete f.length, delete f.name, name && (f.name = name);
+		delete delete f.length, delete f.name, name && (f.name = name);
 		f[fenv] = env;
 		return f;
 	})).doc = `Constructs a JS function from a string in an (unchangable) environment, or sets the environment after construction elsewhere, or gets the environment of a function (for reconstruction). For example, Function.env('x=>a+b+x', {a:1,b:2})(3) returns 6.`;
@@ -94,23 +94,27 @@
 			return obj[prototype] === Object.prototype;
 		return false;
 	});
-	const mix = ((o,f) => {
+	const mix = ((o,f,at='<none>') => {
 		if (o === _ || o === f) return f;
 		if (f === _) return o;
-		if (typeof o === 'function' && typeof f === 'function')
-			throw`Trying to override a function with another function`;
+		if (typeof o === 'function' && typeof f === 'function') {
+			throw`Trying to override a function with another function, ${at}`;
+		}
 		if (o instanceof Array)
 			return f instanceof Array ? o.push(...f) : o.push(f), o;
 		if (typeof f === 'function') {
-			if (!o || !expandable(o) && o[prototype] !== define)
-				throw`Trying to override ${typeof o} with a function`;
-			for (const k in o) f[k] = mix(o[k], f[k]);
+			if (!o || !expandable(o) && o[prototype] !== defines)
+				throw`Trying to override ${typeof o} with a function, ${at}`;
+			for (const k in o) f[k] = mix(o[k], f[k], k);
 			return f;
 		} else if (expandable(f)) {
-			for (const k in f) o[k] = mix(o[k], f[k]);
+			for (const k in f) {
+				let g = mix(o[k], f[k], k);
+				o[k] !== g && (o[k] = g);
+			}
 			return o;
 		} else if (f instanceof Array) return f.unshift(o), f;
-		else throw`Trying to override ${typeof o} with ${typeof f}`;
+		else throw`Trying to override ${typeof o} with ${typeof f}, ${at}`;
 	});
 
 
@@ -133,8 +137,9 @@
 
 
 
-	const stringOf = (f => {
+	const stringOf = ((f, at) => {
 		{"f(){} -> (function(){}),  ()=>{} -> (function(){}),  native -> null"}
+		at = at || '<none>';
 		if (f.name && globals[f.name] === f) return null;
 		let s = f[Object.string].trim();
 		let i = s.indexOf('{'), j = s.indexOf('=>');
@@ -145,77 +150,102 @@
 		if (s[i] === '=') {
 			let head = s[0] === '(' ? s.slice(0,i).trim() : '(' + s.slice(0,i).trim() + ')';
 			let body = s.slice(i+2).trim();
-			if (body[0] !== '{') body = '{return ' + body + '}';
+			if (body[0] !== '{') body = '{return ' + body + '\n//# sourceURL='+at+'\n' + '}';
 			return '(function self' + head + body.replace(/\t+/g, ' ') + ')';
-		} else return '(function self' + s.slice(s.indexOf('(')).replace(/\t+/g, ' ') + ')';
+		} else {
+			return '(function self' + s.slice(s.indexOf('('), -1).replace(/\t+/g, ' ') + '\n//# sourceURL='+at+'\n' + '})';
+		}
 	});
 	const assemble = ((mods, env, name) => {
 		const arr = ["'use strict';ⴵMark('Fetch+parse');const ⴵCall=[];"];
-		const args = { ⴵ:env, ⴵMix:mix, ⴵFenv:Function.env, ⴵView:Object.create, ⴵFr:fr, ⴵMark:mark, _ };
+		const args = { ⴵ:env, ⴵMix:mix, ⴵFenv:Function.env, ⴵView:Object.create, ⴵFr:fr, ⴵMark:mark };
 
 		const all = {};
-		for (const r in env) if (named(r)) all[r] = true;
-		mods.forEach(m => { if (m.define) for (let k in m.define) if (named(k)) all[k] = true });
+		for (const r in env) try { all[named(r)] = true } catch (err) {}
+		mods.forEach(m => {
+			if (m.defines)
+				for (let k in m.defines)
+					if (named(k))
+						all[k] = true
+		});
 		arr.push('const[', Object.keys(all).join(','), ']=(()=>{');
 
 		let n = 0, path = [];
 		function arg(o) { const s = 'ⴵ' + (n++).toString(36); args[s] = o, arr.push(s) }
-		function called(o) { return typeof o.call === 'function' }
+		function called(o) {
+			return typeof o.call === 'function' && typeof o !== 'function'
+		}
 		function expr(o, base = false) {
 			let s = '';
-			if (typeof o === 'function' && (s = stringOf(o)) !== null && !base) {
-				if (s.indexOf('ⴵ')>=0) throw 'ⴵ is used internally — use another char eternally';
-				arr.push('ⴵFenv(', s, ',ⴵMod,', expr(path.join('.')), ')');
+			if (typeof o === 'function' && (s = stringOf(o, path.join('.'))) !== null && !base) {
+				if (s.indexOf('ⴵ')>=0)
+					throw 'ⴵ is used internally — use another char eternally';
+				arr.push('ⴵFenv(', s, ',ⴵMod,');
+				expr(path.join('.'));
+				arr.push(')');
 			} else if (o instanceof Array && !base) {
 				arr.push('[');
-				for (const i=0; i < o.length; ++i) s && arr.push(','), s=1, expr(o[i]);
+				for (let i=0; i < o.length; ++i)
+					s && arr.push(','), s = true, expr(o[i]);
 				arr.push(']');
 			} else if (expandable(o) && s !== null) {
-				if (called(o) && !base) arr.push('ⴵMix('), expr(o.call), arr.push(',');
-				else if (o[prototype] && !base) arr.push('ⴵMix(ⴵView('), arg(o), arr.push('),');
+				if (called(o) && !base)
+					arr.push('ⴵMix('), expr(o.call), arr.push(',');
+				else if (o[prototype] !== Object.prototype && !base)
+					arr.push('ⴵMix(ⴵView('), arg(o), arr.push('),');
 				arr.push('{');
-				for (const k in o) if (k !== 'call' || !called(k)) {
-					s && arr.push(','), s=1;
+				for (const k in o) if (k !== 'call' || !called(o)) {
+					s && arr.push(','), s = true;
 					if (/^[A-Za-z_]+$/.test(k)) arr.push(k);
 					else arr.push('["', k.replace(/"/g, '\\"'), '"]');
 					arr.push(':'), path.push(k), expr(o[k]), path.pop();
 				}
 				arr.push('}');
-				if ((called(o) || o[prototype]) && !base) arr.push(')');
-			} else if (o === _) arr.push('_');
-			else if (o === null || typeof o === 'number' || typeof o === 'boolean') arr.push(''+o);
-			else arg(o);
+				if ((called(o) || o[prototype] !== Object.prototype) && !base)
+					arr.push(')');
+			} else if (o === _) { arr.push('void 0') }
+			else if (o === null || typeof o === 'number' || typeof o === 'boolean') {
+				arr.push(''+o);
+			} else arg(o);
 		}
 
 		mods.forEach(m => {
-			if (m.define)
-				for (const k in m.define)
+			if (m.defines)
+				for (const k in m.defines)
 					if (k in m) throw 'Shadowing own defines is not fine for a module: '+k;
 			arr.push('ⴵMix(ⴵ,(()=>{const ⴵMod=ⴵView(ⴵ)');
-			for (const k in m) if (k !== 'define' && k !== 'name' && (k !== 'call' || !called(m)))
-				!named(k) && error('Unnameable private module definition: '+k),
-				arr.push(',', k, '=ⴵMod.', k, '='), expr(m[k]);
-			arr.push(';ⴵFr(ⴵMod);ⴵMark('), expr(m.name || '<unnamed>'), arr.push(');');
+			for (const k in m)
+				if (k!=='defines' && k!=='name' && (k !== 'call' || !called(m))) {
+					if (!named(k)) 
+						throw 'Unnameable private module definition: '+k;
+					arr.push(',', k, '=ⴵMod.', k, '='), expr(m[k]);
+				}
+			arr.push(';ⴵFr(ⴵMod);');
+			arr.push('ⴵMark('), expr(m.name || '<unnamed>'), arr.push(');');
 			if (called(m)) arr.push('ⴵCall.push('), expr(m.call), arr.push(');');
-			if (m.define) arr.push('return'), expr(m.define, true);
+			if (m.defines) arr.push('return '), expr(m.defines, true);
 			arr.push('})());\n');
 		});
 
 		arr.push('ⴵFr(ⴵ);return[ⴵ.', Object.keys(all).join(',ⴵ.'), ']})();');
-		arr.push('ⴵCall.forEach(f=>f(ⴵ)),ⴵCall.length=0;ⴵMark("Post-init calls"),ⴵMark();');
-		arr.push('ⴵ=ⴵMix=ⴵFenv=ⴵView=ⴵFr=ⴵMark=_\n//# sourceURL=', name);
+
+		arr.push('\nⴵCall.forEach(f=>f(ⴵ)),ⴵCall.length=0;ⴵMark("Post-init calls"),ⴵMark();');
+		arr.push('ⴵ=ⴵMix=ⴵFenv=ⴵView=ⴵFr=ⴵMark=_');
+		arr.push('\n//# sourceURL=' + name + '\n');
+
+		log(['Assembled source:', '', '', ...arr.join('').split('\n')]);
 
 		return Function(Object.keys(args), arr.join('')).apply(_, Object.values(args));
 	});
 
 
 
-	const globals = { on:{} }, define = auth(Object, 'create')(globals);
-	define.globals = globals, define.define = define;
-	define.window = define.global = define.self = _;
-	define.on = {};
-	define._ = _, define.prototype = prototype;
-	Function(define.init = ("'use strict';("+init+")(typeof self!=''+void 0?self:typeof global!=''+void 0?global:window);").replace(/\s+/g, ' '));
+	const globals = { on:{} }, defines = auth(Object, 'create')(globals);
+	defines.globals = globals, defines.defines = defines;
+	defines.window = defines.global = defines.self = _;
+	defines.on = {};
+	defines._ = _, defines.prototype = prototype;
+	Function(defines.init = ("'use strict';("+init+")(typeof self!=''+void 0?self:typeof global!=''+void 0?global:window);").replace(/\s+/g, ' '));
 
 
 
@@ -223,6 +253,7 @@
 	const pb = { PrivacyBadger: 'relies on this near page load to not throw in our name.' };
 	const spare = {
 		code:1, self:1, devicePixelRatio:1, isSecureContext:1, GLOBAL:1, root:1,
+		_:1,
 
 		Math:0, Array:0, Object:pb, Function:0, Symbol:0, String:0, Map:0, Set:0,
 		WeakMap:0, WeakSet:0, Int8Array:0, Int16Array:0, Int32Array:0,
@@ -255,7 +286,7 @@
 			if (!mods.length) return;
 			{"Deleting them all breaks JS-Node and some extensions — sloppy code."}
 			if (typeof process === ''+_) hide(), setTimeout(hideRest, 5000);
-			try { assemble(mods, define, 'after') }
+			try { assemble(mods, defines, 'assembled') }
 			finally { array(mods), array.a.length = 0 }
 		},
 		f => {
@@ -268,6 +299,7 @@
 		}
 	);
 	self.process && require('./after.js');
+	self.process && require('./for-ravens.js');
 	{
 		const ap = Array.prototype, op = Object.prototype, fp = Function.prototype;
 		'concat entries every filter find findIndex flat flatMap keys lastIndexOf map reduce reduceRight shift some unshift values'.split(' ').forEach(k => delete ap[k]);
@@ -287,7 +319,7 @@
 		globals.HTMLCanvasElement = self.HTMLCanvasElement;
 		ownNames(self).forEach(k => {
 			if (spare[k] === 1 || k === 'code') return;
-			if (k.slice(0,2) === 'on') define.on[k.slice(2)] = true;
+			if (k.slice(0,2) === 'on') defines.on[k.slice(2)] = true;
 			try {
 				if (!(k.slice(0,3)in o) || k.slice(3, 3 + o[k.slice(0,3)].length) !== o[k.slice(0,3)])
 					if (!(k in globals) && self[k])
@@ -297,4 +329,4 @@
 		});
 	}
 })(typeof self !== ''+void 0 ? self : typeof global !== ''+void 0 ? global : window);
-//# sourceURL=code
+//# sourceURL=network-base
