@@ -28,14 +28,23 @@ let c = {
   }
 
   function ax() {
-    "(a 'zx' ()) to js['a', ['string', 'zx'], []]"
-    let l = '('.codePointAt(0), r = ')'.codePointAt(0)
-    if (!get(l)) return
+    "(a b c) to js['a', 'b', 'c']"
+    let lA = '('.codePointAt(0), rA = ')'.codePointAt(0)
+    "{a b c} to js['first', 'a', 'b', 'c']"
+    let lF = '{'.codePointAt(0), rF = '}'.codePointAt(0)
+    "[a b c] to js['last', 'a', 'b', 'c']"
+    let lL = '['.codePointAt(0), rL = ']'.codePointAt(0)
+
+    let L = get(lL), F = get(lF)
+    if (!L && !F && !get(lA)) return
     let arr = []
+    L && arr.push('last'), F && arr.push('first')
     while (at < str.length) {
-      arr.push(expr())
-      if (arr[arr.length - 1] == null)
-        return arr.pop(), get(r) ? arr : void 0
+      let x = expr()
+      if (x == null)
+        return get(L ? rL : F ? rF : rA) ? arr : void 0
+      else
+        arr.push(x)
     }
   }
   function label() {
@@ -93,8 +102,15 @@ let c = {
     if (typeof s === 'string')
       return /^[a-z.A-Z]+$/.test(s) ? s : "(label '" + s.replace(/'/g, "''") + "')"
     if (s instanceof Array) {
+      if (s.length === 1) return serialize(s[0])
+        // Optimize this little case.
+
       if (s[0] === 'string' && typeof s[1] === 'string' && s[2] == null)
         return "'" + s[1].replace(/'/g, "''") + "'"
+      if (s[0] === 'last')
+        return '[' + s.slice(1).map(x => serialize(x)).join(' ') + ']'
+      if (s[0] === 'first')
+        return '{' + s.slice(1).map(x => serialize(x)).join(' ') + '}'
       return '(' + s.map(x => serialize(x)).join(' ') + ')'
     }
     return JSON.stringify(s, null, 2)
