@@ -3,15 +3,27 @@
   <meta charset=utf-8>
   <title>"War"</title>
 </head>
-<body>
+<body style="text-align:center">
+  <br>
   <noscript>JS required.</noscript>
   Experimental parse-eval-serialize loop, beneficial for early PL development.
+  <span
+    style="border-radius:50%;
+      box-shadow:black 0 0 1px inset;
+      padding:1px"
+    title="Syntax of an expression here:
+    - Labels: `x`, `abc`, `x.y.z`, `(label 'o p q')`. Case-sensitive (by semantics).
+    - Strings: `'x'`, `'abc'`, `'a''b''c'`. Only escapes `'` (with `'`) inside.
+    - Arrays (executable when looked at): `(a b c)`.
+    - First success of array: `{a b c}`. Same as `(first a b c)`.
+    - Last success of array: `[a b c]`. Same as `(last a b c)`.
+    If anything is left after an expression, it is parsed as `(eval Expr Rest)`.">?</span>
   <div>
     CPU usage:
-    <input id=timeUsed type=range min=0 max=100 step=1 value=20>
-    <div id=timeUsedLabel></div>
+    <input id=timeUsed type=range min=0 max=100 step=1 value=1>
+    <span id=timeUsedLabel></span>
   </div>
-  <div>
+  <div style="text-align:left">
     <textarea id=codeArea autofocus></textarea>
     <textarea id=resultArea readonly></textarea>
   </div>
@@ -24,7 +36,7 @@
   <script src="./codemirror/addon/selection/active-line.js"></script>
   <style>
     .cm-label { color: darkblue }
-    .cm-lAx, .cm-rAx { color: darkslategray; font-size: 1.2em }
+    .cm-l, .cm-r { font-size: 1.2em }
     .cm-matchhighlight {
       background-color: rgba(230, 30, 0, .3);
       box-shadow: coral 0 0 .3em;
@@ -36,8 +48,8 @@
     CodeMirror.defineSimpleMode('war', {
       start: [
         {regex:/[ \n\r\t]+/, token: 'ws'},
-        {regex:/\(/, indent:true, token: 'lAx'},
-        {regex:/\)/, dedent:true, token: 'rAx'},
+        {regex:/[({[]/, indent:true, token: 'l'},
+        {regex:/[)}\]]/, dedent:true, token: 'r'},
         {regex:/'(?:[^']|'')*'/, token: 'string'},
         {regex:/[a-z.A-Z]+/, token: 'label'},
       ]
@@ -51,7 +63,7 @@
       showCursorWhenSelecting: true,
       cursorBlinkRate: 0,
       cursorScrollMargin: 15,
-      autoCloseBrackets: { pairs: "()''", explode: "()", },
+      autoCloseBrackets: { pairs: "(){}[]''", explode: "(){}[]", },
       highlightSelectionMatches: true,
       styleActiveLine: true,
     }
@@ -59,6 +71,8 @@
     basicHighlighting.readOnly = true
     self.resultArea = CodeMirror.fromTextArea(resultArea, basicHighlighting)
     setInterval(() => codeArea.save(), 60000)
+
+    codeArea.title = `hello`
   </script>
   <script src="war.js"></script>
 </body>
