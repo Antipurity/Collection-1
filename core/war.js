@@ -67,7 +67,7 @@ let c = {
       }
       ++at
     }
-    if (str.codePointAt(at) !== q) return
+    if (str.codePointAt(at-1) !== q) return
     return ['string', str.slice(from, at-1).replace(/''/g, "'")]
   }
 
@@ -90,12 +90,25 @@ let c = {
 
   function serialize(s) {
     // Must turn it into what it would parse into — parse(serialize(…)) should mean the same thing.
+    if (typeof s === 'string')
+      return /^[a-z.A-Z]+$/.test(s) ? s : "(label '" + s.replace(/'/g, "''") + "')"
+    if (s instanceof Array) {
+      if (s[0] === 'string' && typeof s[1] === 'string' && s[2] == null)
+        return "'" + s[1].replace(/'/g, "''") + "'"
+      return '(' + s.map(x => serialize(x)).join(' ') + ')'
+    }
     return JSON.stringify(s, null, 2)
   }
 
   function step(x) {
     // Transform x into what it is defined to become.
-    return x
+    if (x instanceof Array) {
+      if (x[0] === 'do' && x[2] == null)
+        return ['do', x[1] === 'z' ? 'x' : 'z']
+      // Branch on its first element, a string that could be 'first', 'last', or a call to another function…
+      // All that's left is to plug in the semantics.
+    }
+    throw ['error', ['join', 'No semantics defined for', x]]
   }
 
   // The interpreter loop.
@@ -106,30 +119,34 @@ let c = {
     catch (e) { resultArea.setValue(serialize(['error', 'Cannot serialize'])) }
   }
 
-  let lastStart = performance.now(), used = 0, total = 0
+  const schedule = requestAnimationFrame, cancel = cancelAnimationFrame
+  const time = performance.now.bind(performance)
+  let lastEnd = time(), used = 0, total = 0
   const rememberCoef = .9
 
-  let onChange = (() => {
+  const onChange = (() => {
     try { x = parse(codeArea.getValue()) }
     catch (e) { x = null, show(['error', 'Cannot parse']) }
-    cancelAnimationFrame(id)
-    id = requestAnimationFrame(function loop() {
-      const start = performance.now()
+    cancel(id)
+    id = schedule(function loop() {
+      const start = time()
 
-      // Continue the loop next time.
-      id = requestAnimationFrame(loop)
+      // Continue the loop later.
+      id = schedule(loop)
 
       const max = timeUsed.value / 100
       if (used < total * max) {
-        const end = start + (Math.min(15, (total * max - used) / (1 - max)) || 0)
+        const end = start + (Math.min(10, (total * max - used) / (1 - max)) || 0)
+          // end + used = (end + total)*max
+            //(...Can't we basically support this usage in binding too, via searching every alternative/equivalency until a satisfactory one (with only the one unknown on one side) is found?)
           // Limit to 10ms to hopefully ensure smoothness (10ms is likely less than 1 animation frame minus any browser work).
 
         // Iterate until we are out of budget for this frame:
         do {
           // Do one interpretation step (loop iteration).
           try { x = step(x) }
-          catch (e) { x = ['error', 'Cannot step'], cancelAnimationFrame(loop) }
-        } while (performance.now() < end)
+          catch (e) { x = e || ['error', 'Cannot step'], cancel(id) }
+        } while (time() < end)
 
         // Show the intermediate result, for instant feedback.
         show(x)
@@ -137,9 +154,9 @@ let c = {
 
       // Track used/total times, forgetting.
       used *= rememberCoef, total *= rememberCoef
-      used += performance.now() - start
-      total += performance.now() - lastStart
-      lastStart = start
+      const now = time()
+      used += now - start
+      total += now - lastEnd, lastEnd = now
 
       // Show used/total times.
       timeUsedLabel.textContent = `${(max*100).toFixed(0)}% needed, ${(used/total*100).toFixed(0)}% actual`
