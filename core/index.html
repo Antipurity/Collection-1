@@ -2,38 +2,42 @@
 <head>
   <meta charset=utf-8>
   <title>"War"</title>
+  <style>
+    hover {
+      display: inline-block; width: 1em; height: 1em;
+      box-shadow: black 0 0 1px inset;
+    }
+    hover::before { content: '?' }
+  </style>
 </head>
 <body style="text-align:center">
   <br>
   <noscript>JS required.</noscript>
   Experimental parse-eval-serialize loop, beneficial for early PL development.
-  <span
-    style="border-radius:50%;
-      box-shadow:black 0 0 1px inset;
-      padding:1px"
+  <hover
     title="Syntax of an expression here:
     - Labels: `x`, `abc`, `x.y.z`, `(label 'o p q')`. Case-sensitive (by semantics).
     - Strings: `'x'`, `'abc'`, `'a''b''c'`. Only escapes `'` (with `'`) inside.
     - Arrays (executable when looked at): `(a b c)`.
     - First success of array: `{a b c}`. Same as `(first a b c)`.
     - Last success of array: `[a b c]`. Same as `(last a b c)`.
-    If anything is left after an expression, it is parsed as `(eval Expr Rest)`.">?</span>
+    If anything is left after an expression, it is parsed as `(eval Expr Rest)`."></hover>
   <div>
     CPU usage:
-    <input id=timeUsed type=range min=0 max=100 step=1 value=1>
-    <span id=timeUsedLabel></span>
+    <input id=timeNeeded type=range min=0 max=100 step=1 value=1>
+    <span id=timeNeededLabel>0</span>% needed, <span id=timeActualLabel>0</span>% actual.
   </div>
   <div style="text-align:left">
     <textarea id=codeArea autofocus></textarea>
     <textarea id=resultArea readonly></textarea>
   </div>
 
-  <link href="./codemirror/lib/codemirror.css" rel=stylesheet type="text/css"></link>
-  <script src="./codemirror/lib/codemirror.js"></script>
-  <script src="./codemirror/addon/mode/simple.js"></script>
-  <script src="./codemirror/addon/edit/closebrackets.js"></script>
-  <script src="./codemirror/addon/search/match-highlighter.js"></script>
-  <script src="./codemirror/addon/selection/active-line.js"></script>
+  <link href="codemirror/lib/codemirror.css" rel=stylesheet type="text/css"></link>
+  <script src="codemirror/lib/codemirror.js"></script>
+  <script src="codemirror/addon/mode/simple.js"></script>
+  <script src="codemirror/addon/edit/closebrackets.js"></script>
+  <script src="codemirror/addon/search/match-highlighter.js"></script>
+  <script src="codemirror/addon/selection/active-line.js"></script>
   <style>
     .cm-label { color: darkblue }
     .cm-l, .cm-r { font-size: 1.2em }
