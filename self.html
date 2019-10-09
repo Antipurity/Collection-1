@@ -1,0 +1,1324 @@
+<!doctype html>
+<head>
+  <meta charset=utf-8>
+  <title>Self-edition</title>
+  <style>*:focus{outline:none; box-shadow:royalblue 0 0 .2em .2em}
+  *{box-sizing:border-box;transition:all .1s}
+  .pickingAt{box-shadow:royalblue 0 0 .2em .2em}
+  ref.pickingAt{outline:.2em solid royalblue}
+  .pickingOf>*:first-child{box-shadow:royalblue 0 0 .2em .2em;background-color:yellow}</style>
+</head>
+<body><script>
+'use strict';
+const globals = typeof self !== ''+void 0 ? self : typeof global !== ''+void 0 ? global : window
+globals.globals = globals
+for (let k of Object.getOwnPropertyNames(Object.prototype))
+  delete Object.prototype[k] // Very hard to be safe otherwise. Besides, autocompletion is much cleaner this way.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function make(x) {return x}
+
+function slice(seq, start, end) {
+  if (end === undefined) end = length(seq)
+  if (start === 0 && end === length(seq)) return seq
+  return new _Slice(seq, start, end)
+}
+
+class _Slice{
+  constructor(seq, start, end){
+    if (start|0 !== start) throw 'Expected an integer start index'
+    if (end|0 !== end) throw 'Expected an integer end index'
+    if (length(seq)|0 !== length(seq)) throw 'Expected a sequence to slice'
+    if (start < 0) throw 'Slicing starts before 0'
+    if (start > length(seq)) throw 'Slicing starts after the sequence'
+    if (start > end) throw 'Slicing starts after it ends'
+    if (end < 0) throw 'Slicing ends before 0'
+    if (end > length(seq)) throw 'Slicing ends after the sequence'
+    if (seq instanceof _Slice)
+      start += seq.start, end += seq.start, seq = seq.seq
+    if (start === end) start = end = length(seq)
+    this.seq = seq, this.start = start, this.end = end
+    return make(this)
+  }
+  length() {
+    return this.end - this.start
+  }
+  assign(a) {
+    if (length(this) != length(a)) return null
+    let ass, arr = []
+    for (let i = length(this); i-- > 0; )
+      if ((ass = assign(
+        this.seq[i + this.start], a instanceof Array ? a[i] : a instanceof _Slice ? a.seq[i + a.start] : null
+      )) == null) return null
+      else arr[i] = ass
+    return arr
+  }
+}
+
+
+
+
+
+function join(...x) {return new _Join(x)}
+
+class _Join{
+  constructor(a){
+    if (a.length > 1)
+      for (let i = 0; i < a.length; ++i)
+        if (a[i] === null) {a = [null]; break}
+    // Can't we do something for join(…, join(…), …) and join(…, […], […], …) and join(…, null, …) in the constructor itself, to optimize usage?
+      // And, if the length of everything is known, can't we join everything immediately?
+        // …But then, we won't be able to pick apart bound patterns, right?
+    this.a = a
+  }
+  assign(a) {
+    if (a instanceof Array) {
+      const starts = []
+      // first conclusively fix beginning/ending knowns in place,
+      // then match everything known,
+      // then match everything unknown between those.
+      // On null, continue; on non-null, return things in a joined array.
+
+      // How do we organize the search for the first match?
+        // Do we pass a second parameter to .assign, the array of starting indexes (of length this.a.length-1)?
+          // But what about this complex two-layered search structure?
+            // This is a dynamic programming problem, we just need to find the right formulation and aux inputs…
+              // "first, with these indexes, when we do not know the indexes between I and J"? We can definitely solve this for zero elements, and for a known-after-unknown element… But will just two unknown indexes be enough? Don't we also need the known/unknown flag, for different stages?
+    }
+    // Assuming a is an array… How do we do a backtracking cascade through this.a, counting up lengths of slices to give to undefined/.assign?
+      // It is clear that we must not return until we have either seen a success, or exhausted every possible combination.
+      // Also, sub-arrays in this.a can only be put at one place.
+    // Also, what about if a is a Join too? We cannot stop counting up the length then, technically…
+      // We cannot fix the ending in place, and we cannot really have the known-matching stage.
+      // And we can't not handle this case either, unless we want infinite recursion (maybe).
+  }
+}
+
+
+
+
+
+
+function el(tag, attr, ...children) {return new _El(tag, attr, children)}
+
+class _El{
+  constructor(a,b,c){ this.tag = a, this.attr = b, this.children = c }
+  assign(e) {
+    if (e instanceof Element || e instanceof _El) {
+      // Pick apart the element:
+      if (e instanceof Element && e.el instanceof _El) return assign(this, e.el)
+      const tag = assign(this.tag, _tagOf(e))
+      if (tag === null) return null
+      const attr = assign(this.attr, _attrOf(e))
+      if (attr === null) return null
+      const children = assign(this.children, _childrenOf(e))
+      if (children === null) return null
+      if (tag === this.tag && attr === this.attr && children === this.children) return this
+      return el(tag, attr, ...children)
+    }
+    throw "El can only pick apart Element or El"
+  }
+}
+
+
+
+
+
+
+
+
+function assign(a,b) {
+  // Only the left side can have a special meaning.
+  // Here, undefined is "anything", null is "nothing".
+  // Define an .assign method on a to have it branched to.
+  if (a == null) return a === null ? a : b
+  if (a === b) return a
+  if (Object.getPrototypeOf(a) === Object.prototype && Object.getPrototypeOf(b) === Object.prototype) {
+    const keysA = Object.keys(a), keysB = Object.keys(b)
+    if (keysA.length != keysB.length) return null
+    const result = {}
+    for (let i = 0; i < keysB.length; ++i)
+      if (!(keysB[i] in a)) return null
+    for (let i = 0; i < keysA.length; ++i) {
+      let ass = assign(a[keysA[i]], b[keysA[i]])
+      if (ass == null) return null
+      result[keysA[i]] = ass
+    }
+    return result
+  }
+  if (a instanceof Array && b instanceof Array) {
+    if (a.length != b.length) return null
+    let ass, arr = []
+    for (let i = 0; i < a.length; ++i)
+      if ((ass = assign(a[i], b[i])) == null) return null
+      else arr.push(ass)
+    return arr
+  }
+  if (a instanceof Node) {
+    if (typeof b == 'string' || b === null)
+      return _replaceNodeWith(a, b)
+    if (typeof b == 'function') {
+      assign(a, b()) // Sync calls may easily cause layout thrashing.
+      a.el = b
+      return a
+    }
+    if (!(b instanceof _El)) throw "Can only assign El or text or null to a Node"
+    if (assign(a.el, b) === a.el) return a
+    a = _childrenOf(_attrOf(_tagOf(a, b), b), b)
+    a.el = b
+    return a
+  }
+  if (typeof a.assign == 'function') return a.assign(b)
+  return null
+}
+
+
+
+
+
+
+function forEach(In, into = []) {
+  // Allocates horribly, but it works: forEach(o,f) calls f(k) for each key in o; forEach(o) returns an array of keys.
+  if (In instanceof Array)
+    for (let k = 0; k < In.length; ++k) {
+      if (into instanceof Array)
+        into.push(In[k])
+      else if (into instanceof Function)
+        into.call(this || In, In[k])
+    }
+  else if (In instanceof Map)
+    In.forEach((v,k) => {
+      if (into instanceof Array)
+        into.push(In[k])
+      else if (into instanceof Function)
+        into.call(this || In, In[k])
+    })
+  else if (In != null) return forEach.call(this || In, Object.keys(In), into)
+}
+
+function length(In) {
+  if (In != null && typeof In.length == 'function') return In.length()
+  else if (In instanceof Array) return In.length
+  else if (In != null) return length.call(this, Object.keys(In), into)
+}
+
+// To complete this picture, there should also be at(o,k,v), and a way to define forEach for unknown types.
+  // undefined could be anything (so at(o,k) gets v, at(o) uses forEach to get a list of all props), null could be nothing (so at(o,k,null) deletes the property).
+  // Frozen objects should become copy-on-write. (And only they can be read during a recording.)
+
+
+
+
+
+
+
+
+
+
+
+let _toNs = {
+  [""]: "http://www.w3.org/1999/xhtml",
+  html: "http://www.w3.org/1999/xhtml",
+  svg: "http://www.w3.org/2000/svg",
+  mathml: "http://www.w3.org/1998/mathml",
+}
+let _toPrefix = {
+  ["http://www.w3.org/1999/xhtml"]: "",
+  ["http://www.w3.org/2000/svg"]: "svg",
+  ["http://www.w3.org/1998/mathml"]: "mathml",
+}
+
+
+
+
+
+
+
+
+
+
+function _tagOf(e, to) {
+  // _tagOf(elem) can be 'svg:button'; _tagOf(elem, 'svg:button') sets an element's tag/namespace to what is requested (replacing the element with a new one if needed).
+  // _tagOf(textNode) will return null.
+  if (to !== undefined) {
+    if (!(e instanceof Node)) throw "Setting children of not-a-node"
+    if (to instanceof _El) to = to.tag
+    if (typeof to != 'string') throw "Unknown tag type: "+(typeof to)
+    const i = to.indexOf(':')
+    let ns, tag
+    if (i<0) { ns = _toNs[""], tag = to }
+    else { ns = _toPrefix[to.slice(0, i)], tag = to.slice(i+1) }
+    if (!ns || !tag) throw "Unrecognized ns/tag in "+to
+    if (e.namespaceURI === ns && e.tagName === tag) return e
+    return _replaceNodeWith(e, document.createElementNS(ns, tag))
+  }
+  if (e instanceof _El) return e.tag
+  const ns = _toPrefix[e.namespaceURI || '']
+  const tag = (e.tagName || '').toLowerCase()
+  if (ns == null || tag == null) return null
+  return ns ? ns+':'+tag : tag
+}
+
+function _attrOf(e, to) {
+  // Example: to={ tabIndex:0, asdf:'zxc', style:{ border: e => `${e.clientWidth}px solid black` } }
+  if (to !== undefined) {
+    if (!(e instanceof Element)) throw "Setting attributes of not-an-element"
+    if (to instanceof _El) to = to.attr
+
+    // The previous `ondrop` (if any) will be called. The new `oninit` (if any) will be called.
+      // Both passed the new element as the sole argument.
+    if (to && 'ondrop' in to && typeof to.ondrop != 'function') throw 'ondrop must be a function or not exist'
+    if (to && 'oninit' in to && typeof to.oninit != 'function') throw 'ondrop must be a function or not exist'
+
+    const prev = e.el && e.el.attr || _attrOf(e)
+
+    // Clear previous attributes/properties first.
+    forEach(prev, k => {
+      if (k === 'ondrop') return prev[k].call(undefined, e) // For when _replaceNodeWith was not called.
+      if (k === 'oninit') return
+      !(k in prev) && (k in e ? delete e[k] : e.removeAttribute(k))
+    })
+
+    // Fill in new values for style/properties/attributes.
+    forEach(to, k => {
+      if (k === 'ondrop') return
+      if (k === 'oninit') return to[k].call(undefined, e)
+
+      if (typeof k != 'string') throw "Do not know how to handle a non-string-keyed attribute"
+      if (k === 'style') {
+        forEach(prev.style, prop => !(prop in to.style) && (e.style[prop] = '', (e.style.removeProperty(prop))))
+        return forEach(to.style, prop => {
+          const v = typeof to.style[prop] == 'function' ? to.style[prop](e) : to.style[prop]
+            // Sync calls may easily cause layout thrashing.
+          e.style[prop] = v
+        })
+      }
+      if (k in e) return e[k] = to[k]
+      if (typeof to[k] != 'string') throw "A non-string non-style non-direct attribute passed in"
+      e.setAttribute(k, to[k])
+    })
+    return e
+  }
+  if (e instanceof _El) return e.attr
+  const attr = {}, a = e.attributes
+  for (let i = 0; i < a.length; ++i) attr[a[i].name] = a[i].value
+  return attr
+}
+
+function _childrenOf(e, to) {
+  if (to !== undefined) {
+    if (!(e instanceof Element)) throw "Setting children of not-an-element"
+    // We add empty spans at the end if needed, and then just bind at equal indexes.
+    if (to instanceof _El) to = to.children
+    if (!(to instanceof Array)) throw "Children must be an array or null"
+    if (!e.childNodes) console.log(e)
+    while (e.childNodes.length < to.length) e.appendChild(document.createElement('span'))
+    for (let i = 0; i < e.childNodes.length; ++i)
+      assign(e.childNodes[i], to[i] || null)
+    return e
+  }
+  if (e instanceof _El) return e.children
+  const arr = []
+  for (let ch = e.firstChild; ch; ch = ch.nextSibling)
+    arr.push(ch instanceof Element ? ch : ch.nodeValue)
+  return arr
+}
+
+
+function _dropElem(e, andChildren = true) {
+  if (e.el instanceof _El) {
+    const prev = e.el.attr || _attrOf(e)
+    if (typeof prev.ondrop == 'function')
+      prev.ondrop.call(undefined, e)
+  }
+  if (andChildren)
+    for (let ch = e.firstChild; ch; ch = ch.nextSibling)
+      _dropElem(ch, true)
+}
+function _replaceNodeWith(Old, New) {
+  if (typeof New == 'string')
+    New = document.createTextNode(New)
+  if (Old.parentNode) {
+    if (New === null) Old.parentNode.removeChild(Old)
+    else Old.parentNode.replaceChild(New, Old)
+  }
+
+  if (New && Old.el !== undefined) New.el = Old.el
+  _dropElem(Old)
+
+  return New
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function Export(obj) { Object.assign(self, obj), Object.assign(Export.ed || (Export.ed = {}), obj) }
+
+
++function() {
+  const make = x => x
+
+  function concept(defines) {
+    if (typeof defines != 'function') throw "Can only define via a call-transforming function"
+    if (new.target) { this.defines = defines; return make(this) }
+    return new concept(defines)
+  }
+  function conceptOf(x) { if (x instanceof concept) return x.defines }
+
+  function imprintCall(a) { a[concept.toJS] = call.prototype[concept.toJS]; return a }
+  function call(...args) {
+    // This program representation could be very binary-format-amenable, alleviating the need to parse, only store/retrieve.  Better than an AST, explicit or parsed.
+    if (new.target) { return make(imprintCall(args)) }
+
+    // See if any concepts define their usage.
+    args = make(imprintCall(args))
+    for (let i = 0; i < args.length; ++i) {
+      const def = conceptOf(args[i])
+      if (!def) continue
+      try {
+        const r = def.call(args[i], args)
+        if (r !== undefined) return r
+      } catch (err) {}
+        // Errors should become concepts that return themselves (caught by specific concepts like "try"), not just get ignored.
+    }
+
+    // An array is allocated at every single call, but at least it's short and generic.
+    try {
+      if (args[0][concept.collected]) return args[0][concept.collected](args)
+      return args[0].call(...args)
+    } catch (err) {}
+  }
+
+  function func(body) {
+    // Turns a quoted block of code (where `new` is used with all call(…)s) into a callable representation.
+      // Each `args` reference is replaced with the args object.
+      // Each `js(…)` is replaced with the string.
+    func.env.n = 0
+    try {
+      func.env.set(collected, 'collected')
+      let str = toJS(body)
+      str = `'use strict';return collected(args => ${str}, {${[...func.env.values()]}})`
+      const f = Function(...func.env.values(), str)(...func.env.keys())
+      f.str = str
+      f.body = body
+      f[concept.toJS] = f => '(...args)=>' + toJS(body)
+      return f
+    } finally {
+      func.env.clear(), func.env.n = 0
+    }
+  }
+  func.env = new Map, func.env.n = 0
+
+  function deref(r) { return r.to } // Read/retrieve/get the value.
+  function ref(to) {
+    // Creates a reference; assign(ref(…), …) to change it, deref(ref(…)) to get its last value.
+    if (new.target) { this.to = to; return this }
+    return new ref(to)
+  }
+  ref.prototype.assign = function(b) {this.to = b}
+
+  function emitNetwork(input = x=>x, output) {
+    let pre = ['const '], post = [] // First define all vars, then assign all references.
+    for (let [x, name] of func.env) {
+      // …Why does it enter an infinite loop.
+        // Because we defer everything unknown to the environment, and when the outer loop needs to expand it, it defers again.
+      pre.push(name, '=')
+      if (x && typeof x == 'object' && x.object) {
+        pre.push('{}')
+        const keys = Object.keys(x)
+        if (keys.length > 1)
+          post.push('Object.assign(', name, ',{', keys.filter(k => k[0] === '_').map(k => k.slice(1) + ':' + toJS(input(x[k]), true)).join(','), '})', '\n')
+            // Shouldn't objects be, like, post-post?
+      } else if (x instanceof ref)
+        pre.push('{to:0}'), post.push(name, '.to=', toJS(input(x.to), true), '\n')
+      else
+        pre.push(toJS(input(x), true))
+      pre.push(',')
+    }
+    pre.pop(), post.pop()
+    post.length && post.push('\n')
+    post.push('return ', output)
+    return '(()=>{"use strict";' + (pre.length > 1 ? pre.join('') + '\n' : '') + post.join('') + '})()'
+  }
+  const saveJS = x => {
+    // Returns a string (that could likely build a web-worker, or be inserted into an HTML page) that replicates a network `x` when run as JS.
+
+    if (!x || typeof x != 'object' || !x.object)
+      throw "top-level of network must be an object like { object:true, _x:1, _y:2 }"
+
+    const load = x._load
+    const save = x._save
+
+    try {
+      func.env.set(x, 'net')
+        // Should such a thing be a reference to itself instead?
+      for (let k of Object.keys(x)) {
+        if (k === 'object') continue
+        if (k[0] !== '_' || !/^[a-z_A-Z]+$/g.test(k.slice(1)))
+          throw "invalid object key "+k.slice(1)+" — (likely) cannot represent it as a js var."
+        func.env.set(x[k], k.slice(1))
+      }
+      load && func.env.set(load, 'load')
+      return emitNetwork(save, load ? 'load(net)' : 'net')
+    } finally {
+      func.env.clear(), func.env.n = 0
+    }
+  }
+
+
+  concept.collected = Symbol()
+  function collected(f, env) {
+    const g = function(...a) { return f.call(this, a) }
+    g[concept.collected] = f
+    g.env = env
+    return g
+  }
+
+
+  function js(...strs) {
+    // An inline substitution into the compiled JS string.
+    // All strings will be put as-is; everything else is expanded as an expression.
+    // We don't check that the string is a valid expression.
+    if (new.target) { this.js = strs; return make(this) }
+    //Function('(' + strs.map(x => typeof x == 'string' ? x : '0').join('') + ')')
+    //Function('[' + strs.map(x => typeof x == 'string' ? x : '0').join('') + ']')
+    return new js(...strs)
+  }
+
+
+
+  concept.toJS = Symbol()
+
+  call.prototype[concept.toJS] = x => {
+    if (!x.length) throw "Nothing to call"
+    return `call(${x.map(toJS)})`
+    // Equal structures just get expanded exponentially. No hidden state saving takes place.
+  }
+
+  const args = js('args')
+
+  js.prototype[concept.toJS] = js => js.js.map(x => typeof x == 'string' ? x : toJS(x)).join('')
+  func[concept.toJS] = func => 'func'
+
+
+  function toJS(x, doNotCache = false) {
+    if (x == null || typeof x == 'boolean' || typeof x == 'number') return ''+x
+    if (!doNotCache && func.env.has(x)) return x instanceof ref ? func.env.get(x)+'.to' : func.env.get(x)
+    if (x[concept.toJS]) return x[concept.toJS](x)
+    if (typeof x == 'string') {
+      // Pick the quote type which would necessitate the least amount of bytes.
+      const q1 = /'/g, q2 = /"/g, q3 = /`/g, newlines = /[\n\r\u2028\u2029]/g
+      const quote = s => ({ '\n':'\\n', '\r':'\\r', '\u2028':'\\u2028', '\u2029':'\\u2029' }[s])
+      const s1 = x.replace(newlines, quote).replace(q1, "\\'")
+      const s2 = x.replace(newlines, quote).replace(q2, '\\"')
+      const s3 = x.replace(q3, "\\`")
+      if (s1.length < s2.length)
+        return s1.length < s3.length ? s1 : s3
+      else
+        return s2.length < s3.length ? s2 : s3
+    }
+    // All other things get passed by-reference.
+    if (!func.env.has(x))
+      func.env.set(x, 'n' + (func.env.n++).toString(36).toUpperCase())
+    if (x instanceof ref) // References get auto-dereferenced.
+      return func.env.get(x) + '.to'
+    return func.env.get(x)
+  }
+
+  Export({ concept, call, func, args, js, saveJS, ref, deref })
+}()
+
+
+
+console.groupCollapsed('Internal representation')
+console.log(call(x=>x, 5))
+console.log( func(new call(x=>x, 5)) )
+console.log( func(new call(x=>x, args)) )
+console.log(call(func(new call(x=>x, args)), 5))
+console.log(call(x=>undefined, concept(_=>5)))
+console.log(call(x=>x, concept(_=>5)))
+console.log(call(x=>undefined, concept(function unwind() {return this})))
+console.log(call(x=>5, concept(function unwind() {return this})))
+console.groupEnd()
+
+
+
+
+console.groupCollapsed('JS save')
+console.log(saveJS({object:true, _x:5}))
+console.log(saveJS({object:true, _x:ref(5)}))
+console.log(saveJS({object:true, _x:func(new call(js('x=>x'), 5))}))
+console.log(saveJS({object:true, _x:ref( func(new call(ref(func(args)), 5)) )}))
+self.a = ref()
+self.b = ref()
+assign(a, func(new call(b, args)))
+assign(b, func(new call(a, args, a)))
+console.log(saveJS({object:true, _a:a, _b:b, _x:new call(a,b)}))
+console.groupEnd()
+
+
+
+
+console.groupCollapsed('Linear save/load')
+function testLinear(x) {
+  const s1 = saveLinear(x)
+  const s2 = saveLinear(loadLinear(s1))
+  return s1 === s2 ? 'OK  '+s1 : 'mismatch:\n  first save is '+s1+';\n  second save is '+s2
+}
+console.log(testLinear({object:true, _x:5}))
+console.log(testLinear({object:true, _x:ref(5)}))
+console.log(testLinear({object:true, _x:func(new call(js('x=>x'), 5))}))
+console.log(testLinear({object:true, _x:ref( func(new call(ref(func(args)), 5)) )}))
+self.a = ref()
+self.b = ref()
+assign(a, func(new call(b, args)))
+assign(b, func(new call(a, args, a)))
+console.log(testLinear({object:true, _a:a, _b:b, _x:new call(a,b)}))
+console.groupEnd()
+
+
+
+
+
+
+
+
+
+
+
+
+
+function valueOf(edit) {
+  if (edit == null) return
+  const tag = _tagOf(edit)
+  if (tag === 'textarea') return edit.value
+  if (tag === 'input' && edit.type === 'number') return +edit.value
+  if (tag === 'input' && edit.type === 'checkbox') return edit.checked
+  if (typeof edit.valueBecomes == 'function') return edit.valueBecomes()
+}
+function editOf(value, like = null) {
+  if (typeof value == 'string') return () => StrEdit(value)
+  if (typeof value == 'number') return () => NumEdit(value)
+  if (typeof value == 'boolean') return () => BoolEdit(value)
+  if (value instanceof ref) return () => RefEdit(value, like ? isRefEditExpanded(like) : undefined)
+  if (typeof value == 'function' && ('body' in value)) return () => FuncEdit(value)
+  if (value instanceof concept) return () => ConceptEdit(value)
+  if (value instanceof Array && value[concept.toJS] === call.prototype[concept.toJS])
+    return () => CallEdit(value, like ? isCallEditExpanded(like) : undefined)
+  if (value && typeof value == 'object' && value.object)
+    return () => ObjectEdit(value, like ? isObjectEditExpanded(like) : undefined)
+  if (value instanceof js)
+    return () => JsEdit(value, like ? isJsEditExpanded(like) : undefined)
+  // Assigning elements to values directly is more laconic, actually.
+}
+
+
+
+
+
+
+function saveLinear(x) {
+  const arr = [0] // index → stringOfLocalX
+  const cache = {} // stringOfLocalX → index
+  const refs = new Map // refObject → index
+  function put(x) {
+    // Merge things of equal local structure.
+      // Even in the simple tests above, half the size is shaved off.
+    const s = JSON.stringify(x)
+    const i = cache[s] || arr.length
+    arr[i] = s
+    return cache[s] = i
+  }
+  function save(x) {
+    if (x === undefined) throw "trying to save undefined"
+    if (x === null) return put(x)
+    if (typeof x == 'string') return put(x)
+    if (typeof x == 'number') return put({number:x})
+    if (typeof x == 'boolean') return put(x)
+    if (x instanceof ref) {
+      // Bypass the cache, and ensure that referring back is possible.
+      if (!refs.has(x)) {
+        // Make a slot at the end, save the value, then fill the slot with value's location.
+        refs.set(x, arr.length)
+        arr[refs.get(x)] = 0
+        arr[refs.get(x)] = ''+save(x.to)
+      }
+      return refs.get(x)
+    }
+    if (typeof x == 'function' && ('body' in x)) return put({func:save(x.body)})
+    if (x instanceof concept) return put({concept:save(x.defines)})
+    if (x instanceof Array && x[concept.toJS] === call.prototype[concept.toJS]) return put(x.map(save))
+    if (x && typeof x == 'object' && x.object) {
+      const y = {object:true}
+      for (let k of Object.keys(x)) if (k[0] === '_') y[k] = save(x[k])
+      return put(y)
+    }
+    if (x instanceof js) return put({js:x.js.map(save)})
+    throw "unknown value to handle"
+  }
+  arr[0] = save(x)
+  return '['+arr+']'
+}
+function loadLinear(json) {
+  const arr = JSON.parse(json) // index → localX
+  const refs = {} // index → refObject
+  return load(arr[0])
+  function load(i) {
+    const l = arr[i]
+    if (l === null) return l
+    if (typeof l == 'string') return l
+    if (typeof l == 'object' && 'number' in l) return l.number
+    if (typeof l == 'boolean') return l
+    if (typeof l == 'number') return i in refs ? refs[i] : assign(refs[i] = ref(), load(l)), refs[i]
+    if (typeof l == 'object' && 'func' in l) return func(load(l.func))
+    if (typeof l == 'object' && 'concept' in l) return concept(func(load(l.concept)))
+    if (l instanceof Array) return new call(...l.map(load))
+    if (typeof l == 'object' && l.object === true) {
+      const x = {object:true}
+      for (let k of Object.keys(l)) if (k[0] === '_') x[k] = load(l[k])
+      return x
+    }
+    if (typeof l == 'object' && 'js' in l) return js(...l.js.map(el => load(el)))
+    throw "unrecognized value to handle"
+  }
+}
+
+
+
+
+
+
+function StrEdit(x = '') {
+  if (typeof x != 'string') throw 'no'
+  const style = { border:'0', minHeight:'1.7em', minWidth:'10em', width:'10em', height:'1.7em', fontSize:'.8em', margin:'.3em', fontFamily:'sans-serif' }
+  return el('textarea', { value:x, style })
+}
+function NumEdit(x = 0) {
+  if (typeof x != 'number') throw 'no'
+  const style = { border:'0', margin:'.3em', fontFamily:'sans-serif' }
+  return el('input', { type:'number', value:x, style })
+}
+function BoolEdit(x = false) {
+  if (typeof x != 'boolean') throw 'no'
+  const style = { border:'0', margin:'0', fontFamily:'sans-serif' }
+  return el('input', { type:'checkbox', checked:x, style })
+}
+
+
+
+
+
+function pickColor(destroy) {
+  if (!pickColor.free) pickColor.free = []
+  if (destroy !== undefined)
+    return destroy && destroy !== 'black' && destroy !== pickColor.free[pickColor.free.length-1] && pickColor.free.push(destroy)
+  if (pickColor.free.length) return pickColor.free.pop()
+
+  if (!pickColor.h) pickColor.h = 90 // Green (120°) first
+  pickColor.h = (pickColor.h + 30 + Math.random()*10) % 360
+  return `hsl(${pickColor.h}deg, ${50 + Math.random()*50}%, ${30 + Math.random()*40}%)`
+}
+function pickVarName(destroy) {
+  if (!pickVarName.free) pickVarName.free = []
+  if (destroy !== undefined)
+    return destroy && destroy !== pickVarName.free[pickVarName.free.length-1] && pickVarName.free.push(destroy)
+  if (pickVarName.free.length) return pickVarName.free.pop()
+
+  if (!pickVarName.n) pickVarName.n = 0
+  return `${(pickVarName.n++).toString(16).toUpperCase()}`
+}
+
+function elemAt(elem) {
+  for (; elem; elem = elem.parentNode)
+    if (elem instanceof Element && valueOf(elem) !== undefined) return elem
+}
+function eventHandled(evt) { evt.preventDefault(), evt.stopPropagation() }
+const refPick = {
+  at:null, of:null,
+  mousemove(evt, clear = false) {
+    //If new is not old: remove highlighting from old, add highlighting to new.
+    const to = clear ? undefined : elemAt(evt.target)
+    if (to === refPick.at) return
+    if (refPick.at) refPick.at.classList.remove('pickingAt')
+    if (to !== undefined) to.classList.add('pickingAt')
+    refPick.at = to
+    eventHandled(evt)
+  },
+  keydown(evt) {
+    //If Escape, stop without changing ref.
+    if (evt.key === 'Escape') document.activeElement.blur(), refPick.mousemove(evt, true), doRefPick()
+  },
+  click(evt) {
+    // Assign ref and element unless clicked at no-value areas.
+    let to = valueOf(elemAt(evt.target))
+    refPick.mousemove(evt, true)
+    const Of = refPick.of
+    doRefPick()
+    if (to === undefined) return console.log('chose nothing')
+    if (to && typeof to.transformAssignment == 'function') to = to.transformAssignment()
+      // Branch-to-data on the right side of "ref=to" too.
+    updateValue(Of.ref, to)
+    // Why does it not save the new value on ref change
+
+    Of.ref.to = to
+    //setTimeout(() => Of.dispatchEvent(new Event('change')), 100)
+      // Why does *this* put the old value back?!
+
+    //assign(Of, RefEdit(Of.ref, isRefEditExpanded(Of)))
+  },
+}
+function doRefPick(Of = null) { // The elem to change the ref of to start, null to end.
+  if (Of !== null && (!(Of instanceof Element) || !(Of.ref instanceof ref)))
+    throw "not an element with a ref"
+  if (Of !== null && refPick.at !== null) throw "already in ref-pick mode"
+  if (Of === null && refPick.of === null) return
+  refPick.at = null, refPick.of = Of
+
+  for (let el of document.querySelectorAll('.pickingOf'))
+    el.classList.remove('pickingOf')
+  if (Of && RefEdit.viewedBy.has(Of.ref))
+    for (let el of RefEdit.viewedBy.get(Of.ref))
+      el.classList.add('pickingOf')
+
+  const method = Of === null ? 'removeEventListener' : 'addEventListener'
+  for (let k in refPick)
+    if (typeof refPick[k] == 'function')
+      window[method](k, refPick[k], true)
+}
+function updateValue(x, to, exclude) {
+  if (!RefEdit.viewedBy.has(x)) return
+  const all = [...RefEdit.viewedBy.get(x)]
+  // Set colors and var names of ref elems viewing the same thing.
+  for (let ref of all) // Free all colors/names.
+    pickColor(ref.style.getPropertyValue('--color')), pickVarName(ref.firstChild.textContent),
+    ref.style.setProperty('--color', 'black'), ref.firstChild.textContent = ''
+  if (all.length > 1) {
+    const c = pickColor(), n = pickVarName()
+    for (let ref of all) // Give a new color/name to all.
+      ref.style.setProperty('--color', c), ref.firstChild.textContent = n
+  }
+  if (!all.length) RefEdit.viewedBy.delete(x)
+  if (to === undefined || x.to === to) return
+  const prev = x.to
+  console.log(prev, '->', to)
+  x.to = to
+  for (let ref of all)
+    if (ref !== exclude)
+      if (mustExpand(prev) === mustExpand(to)) {
+        // Update all contents if their contents are different.
+        if (ref.lastChild.firstChild)
+          assign(ref.lastChild.firstChild, editOf(to, ref.lastChild.firstChild))
+      } else {
+        // Re-assign the ref edit itself.
+          // This also triggers updateValue for each, but they're all the same, so who cares.
+        x.to = to, assign(ref, RefEdit(x, true)), x.to = prev
+      }
+  x.to = to
+}
+function mustExpand(v) { return typeof v == 'string' || typeof v == 'number' || typeof v == 'boolean' }
+
+function isRefEditExpanded(edit) {
+  return edit && edit.lastChild && !!edit.lastChild.lastChild
+}
+function RefEdit(x, expanded = false) {
+  if (!(x instanceof ref)) throw "not a ref"
+  if (!RefEdit.viewedBy) RefEdit.viewedBy = new WeakMap
+  const alwaysExpanded = mustExpand(x.to)
+  if (alwaysExpanded) expanded = true
+  let refEdit
+  return el('ref',
+    {
+      tabIndex:0, // Everything with onclick should also have tabIndex, to provide visual feedback of that fact.
+        // (Though, something like onActivate could be even better.)
+      title: expanded ? "Click to hide the value of this reference." : "Click to show the value of this reference.",
+      style:{ borderRadius:'.2em', boxShadow: '0 0 .2em var(--color)', textAlign:'left', display:'block', padding:'0 .5em' },
+      onclick: evt => { // Expand or collapse us.
+        if (alwaysExpanded || expanded && refEdit.lastChild.firstChild.contains(evt.target)) return
+        assign(refEdit, RefEdit(valueOf(refEdit), !expanded))
+        eventHandled(evt)
+      },
+      onchange: evt => {
+        if (!expanded) return
+        const v = valueOf(refEdit.lastChild.firstChild)
+        updateValue(x, v, refEdit)
+      },
+      oninit: e => {
+        refEdit = e, e.ref = x, e.valueBecomes = (() => x)
+        e.style.setProperty('--color', 'black')
+        if (!RefEdit.viewedBy.has(x)) RefEdit.viewedBy.set(x, [])
+        RefEdit.viewedBy.get(x).push(e)
+        setTimeout(() => updateValue(x), 0)
+      },
+      ondrop: e => {
+        if (!RefEdit.viewedBy.has(x)) return
+        const arr = RefEdit.viewedBy.get(x)
+        for (let i=0; i<arr.length; ++i)
+          if (arr[i] === e) { i < arr.length-1 ? (arr[i] = arr.pop()) : arr.pop(); break }
+        updateValue(x)
+      },
+    },
+    el('ReassignmentPin', {
+      tabIndex:0,
+      title:"Click on this then any value to assign this reference to the chosen thing (Escape to cancel the selection).",
+      style:{ minWidth:'.8em',minHeight:'.8em', borderRadius:'.4em', padding:'.1em', display:'inline-block', backgroundColor:'var(--color, black)', verticalAlign:'middle', textShadow:'0 0 .2em white' },
+      onclick: evt => {
+        // If not picking, pick for us; else stop picking.
+        refPick.at === null ? doRefPick(refEdit) : doRefPick()
+        eventHandled(evt)
+      },
+    }, ...(RefEdit.viewedBy.has(x) && RefEdit.viewedBy.get(x).length > 0 ? [RefEdit.viewedBy.get(x)[0].firstChild.textContent] : [''])),
+    ' ',
+    ...(!alwaysExpanded ? [el('IsExpanded', { style:{ display:'inline-block', transform: expanded ? 'rotate(90deg)' : 'none', textAlign:'center' } },
+      '‣' // \u2023
+    )] : []),
+    alwaysExpanded ? el('Content', { style:{ padding:'0 .5em', display:'inline-block' }, title:"" },
+      editOf(x.to)
+    ) : expanded ? el('Content', { style:{ padding:'0 .5em', display:'block' }, title:"" },
+      editOf(x.to)
+    ) : el('Content', { style:{display:'block'} }),
+  )
+}
+
+
+
+
+
+
+
+
+function FuncEdit(x) {
+  if (typeof x != 'function' || !('body' in x)) throw "not a func(body)-created function"
+  return el('Func',
+    {
+      title:"When called, functions have their bodies instantiated with input (`args`). To control conceptual overriding, make a function a concept.",
+      oninit:e => e.valueBecomes = () => func(valueOf(e.lastChild).to),
+    },
+    'Function body:',
+    el('br'),
+    RefEdit(ref(x.body)),
+      // All this rampant ref-creation desynchronizes stuff.
+      // Should really make these refs real, at least in the sense of "pull it out again when re-viewing the same object".
+  )
+}
+function ConceptEdit(x) {
+  if (!(x instanceof concept)) throw "not a concept(defines)-created object"
+  if (typeof x.defines != 'function' || !('body' in x.defines)) throw "not a func(body)-created definition"
+  return el('Concept',
+    {
+      title:"Something that defines its own usage in calls, if the called function does not handle input.",
+      oninit:e => e.valueBecomes = () => concept(func(valueOf(e.lastChild).to)),
+    },
+    'Concept defines:',
+    el('br'),
+    RefEdit(ref(x.defines.body)),
+  )
+}
+
+
+
+
+function isCallEditExpanded(edit) {
+  // Return an array of booleans, that can be passed as the second arg to CallEdit.
+  return [...edit.childNodes[1].childNodes].map(isRefEditExpanded)
+}
+function CallEdit(x, expanded = []) {
+  if (!(x instanceof Array) || x[concept.toJS] !== call.prototype[concept.toJS]) throw "not a call object"
+  let edit
+  function values() {
+    return [...edit.childNodes[1].childNodes].map(el => valueOf(el).to)
+  }
+  return el('Call',
+    {
+      title:"A call will first check whether any concept returns non-undefined, then run the function in the first position.",
+      oninit: e => (edit = e, e.valueBecomes = () => {
+        return new call(...values())
+      }),
+      style:{ display:'inline-block' },
+    },
+    'Call:',
+    el('Container', { style:{ display:'block' } },
+      // All the refs.
+      ...x.map((v,i) => RefEdit(ref(v), expanded[i]))
+    ),
+    el('button', {
+      tabIndex: 0,
+      style:{ border:'none' },
+      // onclick: re-assign self with one more item.
+      onclick: evt => { assign(edit, CallEdit(new call(...values(), js()), isCallEditExpanded(edit))), eventHandled(evt) },
+    }, '+'),
+    ...(x.length > 1 ? [el('button', {
+      tabIndex: 0,
+      style:{ border:'none' },
+      //onclick: re-assign self with one less item.
+      onclick: evt => { assign(edit, CallEdit(new call(...values().slice(0,-1)), isCallEditExpanded(edit))), eventHandled(evt) },
+    }, '-')] : []),
+  )
+}
+
+function isObjectEditExpanded(edit) {
+  // Return an array of booleans, that can be passed as the second arg to ObjectEdit.
+  return [...edit.childNodes[1].childNodes].map(prop => isRefEditExpanded(prop.lastChild))
+}
+function objectOf(k,v) {
+  const o = { object:true }
+  for (let i = 0; i < k.length; ++i) o['_'+k[i]] = v[i]
+  return o
+}
+function ObjectEdit(x, expanded = []) { //{ object:true, _x:1, _y:2 }
+  if (!x || typeof x != 'object' || !x.object) throw "not an object"
+
+  const keys = Object.keys(x).filter(k => k[0] === '_')
+  let edit
+
+  function value() {
+    const ch = [...edit.childNodes[1].childNodes]
+    return objectOf(ch.map(prop => valueOf(prop.firstChild)), ch.map(prop => valueOf(prop.lastChild).to))
+  }
+
+  return el('Object',
+    {
+      title:"A store for mapping string keys to values.",
+      oninit: e => (edit = e, e.valueBecomes = () => {
+        // Collect the current values from prop edits.
+        return value()
+      }),
+      style:{ display:'inline-block' },
+    },
+    'Object:',
+    el('Container', { style:{ display:'block' } },
+      // All the refs.
+      ...keys.map((k,i) => el('Property', { display:'block' },
+        StrEdit(k.slice(1)),
+        RefEdit(ref(x[k]), expanded[i]),
+      ))
+    ),
+    el('button', {
+      tabIndex: 0,
+      style:{ border:'none' },
+      // onclick: re-assign self with one more prop.
+      onclick: evt => {
+        const x = value(), keys = Object.keys(x).filter(k => k[0] === '_')
+        for (let i = 0; ; ++i) {
+          const k = i ? '_' + i.toString(36) : '_'
+          if (!(k in x)) { keys.push(k); break }
+        }
+        const o = objectOf(keys.map(k=>k.slice(1)), keys.map(k => k in x ? x[k] : js()))
+        assign(edit, ObjectEdit(o, isObjectEditExpanded(edit)))
+        eventHandled(evt)
+      },
+    }, '+'),
+    ...(keys.length ? [el('button', {
+      tabIndex: 0,
+      style:{ border:'none' },
+      //onclick: re-assign self with one less prop.
+      onclick: evt => {
+        const x = value(), keys = Object.keys(x).filter(k => k[0] === '_')
+        const k = keys.slice(0,-1)
+        const o = objectOf(k.map(k=>k.slice(1)), k.map(k=>x[k]))
+        assign(edit, ObjectEdit(o, isObjectEditExpanded(edit)))
+        eventHandled(evt)
+      },
+    }, '-')] : []),
+  )
+}
+
+
+
+function isJsEditExpanded(edit) {
+  // Return an array of booleans, that can be passed as the second arg to JsEdit.
+  return [...edit.childNodes[1].childNodes].map(isRefEditExpanded)
+}
+function JsEdit(x, expanded = []) {
+  if (!(x instanceof js)) throw "not a js(…) object"
+  let edit
+  function values() { return [...edit.childNodes[1].childNodes].map(el => valueOf(el).to) }
+  return el('Js',
+    {
+      title:"Strings here get expanded as-is in JS conversion.",
+      oninit: e => (edit = e, e.valueBecomes = () => {
+        return js(...values())
+      }),
+      style:{ display:'inline-block' },
+    },
+    'Js:',
+    el('Container', { style:{ display:'block' } },
+      // All the refs.
+      ...x.js.map((v,i) => RefEdit(ref(v), expanded[i]))
+    ),
+    el('button', {
+      tabIndex: 0,
+      style:{ border:'none' },
+      // onclick: re-assign self with one more item.
+      onclick: evt => { assign(edit, JsEdit(js(...values(), ''), isJsEditExpanded(edit))), eventHandled(evt) },
+    }, '+'),
+    ...(x.length > 1 ? [el('button', {
+      tabIndex: 0,
+      style:{ border:'none' },
+      //onclick: re-assign self with one less item.
+      onclick: evt => { assign(edit, JsEdit(js(...values().slice(0,-1)), isJsEditExpanded(edit))), eventHandled(evt) },
+    }, '-')] : []),
+  )
+}
+
+
+
+const htmlEntityMap = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+  '/': '&#x2F;',
+  '`': '&#x60;',
+  '=': '&#x3D;'
+}
+function escapeHtml(string) {
+  return string.replace(/[&<>"'`=\/]/g, s => htmlEntityMap[s]);
+}
+
+function NetworkEdit(x) {
+  const buttonStyle = {
+    backgroundColor:'royalblue', color:'#eee', borderRadius:'.5em', border:'none', padding:'.5em'
+  }
+  let edit, iframe, textarea
+  function Ref() { return edit.childNodes[1] }
+  return el('Network',
+    {
+      title:`Network of code. Only do objects.
+        All immediate properties will be accessible as const variables of the same name.
+        .save is applied at saving time to transform each node (ref/function).
+        .load is applied at loading time to the network as a whole.
+        .call is used to specify the internals of functions, representing an application with args.`,
+      oninit: e => (edit = e, e.valueBecomes = () => {
+        return valueOf(Ref()).to
+      }),
+      style:{ boxShadow:'0 0 .2em black', display:'inline-block', textAlign:'center', padding:'.5em', margin:'.5em' },
+    },
+    el('br'),
+    RefEdit(ref(x), true),
+    el('br'),
+    el('br'),
+    el('button', {
+      onclick: evt => {
+        try {
+          const js = saveJS(valueOf(Ref()).to)
+          iframe.srcdoc = `<script>${js}</${''}script>`
+        } catch (e) {
+          iframe.srcdoc = typeof e == 'string' ? `<b>${e}</b>` : `An error has occured`
+          if (typeof e != 'string') throw e
+        }
+      },
+      style:buttonStyle,
+    }, 'Open ↓'),
+    ' ',
+    el('button', {
+      onclick: evt => {
+        try {
+          console.log(valueOf(Ref()).to)
+          const js = saveJS(valueOf(Ref()).to)
+          console.log(js)
+          iframe.srcdoc = `Network:<br><code><pre>${escapeHtml(js)}</pre></code>`
+        } catch (e) {
+          iframe.srcdoc = typeof e == 'string' ? `<b>${e}</b>` : `An error has occured`
+          if (typeof e != 'string') throw e
+        }
+      },
+      style:buttonStyle,
+    }, 'Open source ↓'),
+    el('br'),
+    el('iframe', { oninit: e => iframe = e, sandbox:"allow-scripts" }),
+    el('br'),
+    el('button', {
+      onclick: evt => textarea.value = saveLinear(valueOf(Ref()).to),
+      style:buttonStyle,
+    }, 'Save →'),
+    el('textarea', { title:"JSON of the linearized representation, with equal parts merged.", oninit: e => textarea = e }),
+    el('button', {
+      onclick: evt => assign(Ref(), RefEdit(ref(loadLinear(textarea.value)), true)),
+      style:buttonStyle,
+    }, '→ Load'),
+  )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const editsStyle = { backgroundColor: '#bbb', borderRadius: '.2em', padding:'.2em', display:'inline-block' }
+const edits = [ // Empty-value generators, to be assigned to refs.
+  function NewArgsEdit() {
+    return el('NewArgs',
+      {
+        title:'Representation of a call via a (specially-marked) array; args[0] is the called function, args[1] is the first arg, and so on. Assign a ref in a function body to this.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return js('args')} }), // Branch-to-data really is amazing for extensibility.
+      }, 'args')
+  },
+  function NewStrEdit() {
+    return el('NewStr',
+      {
+        title:'Assign a ref to this to edit an empty string.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return ''} }),
+      }, 'string')
+  },
+  function NewNumEdit() {
+    return el('NewNum',
+      {
+        title:'Assign a ref to this to edit the number 0.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return 0} }),
+      }, 'number')
+  },
+  function NewBoolEdit() {
+    return el('NewBool',
+      {
+        title:'Assign a ref to this to edit the boolean false (bit 0).',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return false} }),
+      }, 'boolean')
+  },
+  function NewFuncEdit() {
+    return el('NewFunc',
+      {
+        title:'Assign a ref to this to edit a new function.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return func(new call(js()))} }),
+      }, 'func')
+  },
+  function NewConceptEdit() {
+    return el('NewConcept',
+      {
+        title:'Assign a ref to this to edit a new concept.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return concept(func(new call(js())))} }),
+      }, 'concept')
+  },
+  function NewCallEdit() {
+    return el('NewCall',
+      {
+        title:'Assign a ref to this to edit a new call.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return new call(js())} }),
+      }, 'call')
+  },
+  function NewObjectEdit() {
+    return el('NewObject',
+      {
+        title:'Assign a ref to this to edit a new object.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return {object:true}} }),
+      }, 'object')
+  },
+  function NewJsEdit() {
+    return el('NewJs',
+      {
+        title:'Assign a ref to this to edit a new inline js substitution.',
+        style:editsStyle,
+        oninit: e => e.valueBecomes = ()=>({ transformAssignment() {return js()} }),
+      }, 'js')
+  },
+  el('div', {style:{margin:'.5em'}},
+    'Temp pins: ',
+    () => el('span', {style:{display:'inline-block'}}, RefEdit(ref(js()))),
+    () => el('span', {style:{display:'inline-block'}}, RefEdit(ref(js()))),
+    () => el('span', {style:{display:'inline-block'}}, RefEdit(ref(js()))),
+  ),
+]
+
+
+function WindowEdit() {
+  let arr = []
+  for (let e of edits) arr.push(e, ' ')
+  return el('Window', { style:{ fontFamily:'sans-serif', display:'inline-block' } },
+    ...arr,
+    NetworkEdit({object:true,
+      _call:js(`(...args) => {
+  // \`concept\` can be used as a function for creating things that override execution; these accept an array with .args=true.
+
+  // See if any concepts define their usage.
+  const make = x=>x
+  const imprintCall = x => (x.args = true, x)
+  args = make(imprintCall(args))
+  for (let i = 0; i < args.length; ++i) {
+    const def = args[i] && args[i][concept.def]
+    if (!def) continue
+    try {
+      const r = def.call(args[i], args)
+      if (r !== undefined) return r
+    } catch (err) {}
+      // Errors should become concepts that return themselves (caught by specific concepts like "try"), not just get ignored.
+  }
+
+  // An array is allocated at every single call, but at least it's short and generic.
+  try {
+    if (args[0][concept.collected]) return args[0][concept.collected](args)
+    return args[0].call(...args)
+  } catch (err) {}
+}`),
+      _concept:js(`function concept(defines) {
+  if (!concept.def) concept.def = Symbol('defines')
+  if (typeof defines == 'function') return { [concept.def]:defines }
+}`),
+      _save:func(args),
+      _load:func(args),
+    })
+  )
+}
+
+
+
+
+
+
+
+let Window = document.body.appendChild(document.createElement('DIV'))
+Window = assign(Window, WindowEdit())
+</script></body>
